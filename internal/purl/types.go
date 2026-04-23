@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Interlynk.io
+// SPDX-License-Identifier: Apache-2.0
+
 package purl
 
 // typeRule captures the normalization and validation posture for a PURL type.
