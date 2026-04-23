@@ -35,7 +35,9 @@ func SetSink(w io.Writer) {
 // "warning: " and terminated with a newline.
 func Warn(format string, args ...any) {
 	counter.Add(1)
-	fmt.Fprintf(sink, "warning: "+format+"\n", args...)
+	// Ignore the write error: if stderr is broken, there's nothing a
+	// warning emitter can do about it, and callers do not propagate it.
+	_, _ = fmt.Fprintf(sink, "warning: "+format+"\n", args...)
 }
 
 // Count returns the number of warnings emitted so far in the process.
