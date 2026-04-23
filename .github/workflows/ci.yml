@@ -78,9 +78,9 @@ jobs:
       - name: staticcheck
         uses: dominikh/staticcheck-action@v1
         with:
-          version: "2025.1.1"
+          version: "2026.1"
           install-go: false
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.3.0
+          version: v2.11.4

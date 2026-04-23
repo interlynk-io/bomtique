@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Interlynk.io
+# SPDX-License-Identifier: Apache-2.0
+
+# Enforce LF line endings for every text file bomtique owns. Without
+# this, Windows checkouts with core.autocrlf=true convert LF → CRLF and
+# gofmt flags every .go file as "not clean".
+* text=auto eol=lf
+
+# Explicit per-extension pins for files that MUST stay LF regardless of
+# auto-detection.
+*.go      text eol=lf
+*.md      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.json    text eol=lf
+*.mod     text eol=lf
+*.sum     text eol=lf
+Makefile  text eol=lf

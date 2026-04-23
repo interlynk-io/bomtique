@@ -10,8 +10,8 @@ GO      ?= go
 GOFLAGS ?=
 
 # Tools installed via `make tools`. Pinned versions keep CI reproducible.
-STATICCHECK_VERSION  := 2025.1.1
-GOLANGCI_LINT_VERSION := v2.3.0
+STATICCHECK_VERSION   := 2026.1
+GOLANGCI_LINT_VERSION := v2.11.4
 
 .PHONY: all build test test-race lint vet fmt fmt-check cover fuzz clean tidy tools ci help
 
