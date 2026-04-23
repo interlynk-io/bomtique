@@ -1,0 +1,13 @@
+# Go build artifacts
+/bomtique
+/dist/
+
+# Local purl-spec test suite — cloned by developers, not tracked.
+# See internal/purl/purl_spec_test.go for setup instructions.
+/testdata/purl-spec/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
