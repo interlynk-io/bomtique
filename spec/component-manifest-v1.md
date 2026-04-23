@@ -1034,8 +1034,8 @@ and MUST reject the manifest on any violation:
 - Every file-form or path-form hash resolves to an existing filesystem entry
   of the required type (Section 8.2, 8.3).
 - Every directory-form hash produces at least one included file (Section 8.4).
-- Hash algorithms in file and directory forms are SHA-256 or SHA-512
-  (Section 8.2, 8.3).
+- Hash algorithms in all forms are restricted to the permitted set in
+  Section 8.1 (SHA-256, SHA-384, SHA-512, SHA-3-256, SHA-3-512).
 - No relative path escapes the manifest's directory without explicit consumer
   configuration (Section 4.3, Section 18).
 - The patched-purl rule holds for every component with a non-empty pedigree
