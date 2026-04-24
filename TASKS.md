@@ -925,23 +925,54 @@ milestone.
 
 ### M14.11 — PyPI importer
 
-- [ ] Recognises `https://pypi.org/project/<name>[/<version>]`,
-      `pypi:<name>[@<version>]`, `pkg:pypi/<name>[@<version>]`.
-- [ ] `GET https://pypi.org/pypi/<name>/json` or
-      `/pypi/<name>/<version>/json`.
-- [ ] Extracted fields: `name` (PEP 503 normalised: lowercased,
-      runs of `[-_.]+` collapsed to `-`), `version`, `license` best-
-      effort from `info.license` (if not a recognised SPDX ID, warn
-      and leave empty, telling the user to pass `--license`),
-      `description` = `info.summary`, `purl`, `supplier` from
-      `info.author` / `info.author_email`, `external_references` from
-      `info.home_page` / `info.project_urls["Source"]` /
-      `info.project_urls["Bug Tracker"]`.
-- [ ] When a version is pinned, emit per-release SHA-256 as a literal
-      hash entry using the sdist (or first wheel) digest from
-      `releases[version][i].digests.sha256`.
-- [ ] Tests via httptest: specific version; latest; missing license;
-      PEP 503 name normalisation; `digests.sha256` populated.
+- [x] Recognises `https://pypi.org/project/<name>[/<version>]`,
+      `pypi:<name>[@<version>]`, `pkg:pypi/<name>[@<version>]` (plus
+      `http://` counterparts).
+- [x] `GET /pypi/<name>/json` (latest) or `/pypi/<name>/<version>/json`
+      (pinned). Both endpoints return the same top-level
+      `{info, urls}` shape, so a single decoder covers both.
+- [x] Name PEP 503 normalised: lowercase, runs of `[-_.]+` collapsed
+      to `-` (`Flask_SQLAlchemy` → `flask-sqlalchemy`). Dedicated
+      unit tests cover the normalisation rules.
+- [x] Extracted fields: `name`, `version` (from
+      `info.version`), `description` = `info.summary`,
+      `purl = pkg:pypi/<name>@<version>`. Supplier from `info.author`
+      / `info.author_email`, falling back to `info.maintainer` /
+      `info.maintainer_email` when author is empty.
+- [x] External references: `website` = `info.home_page`, `vcs` from
+      `project_urls["Source" | "Source Code" | "Repository" | "Code"]`,
+      `issue-tracker` from `project_urls["Bug Tracker" | "Issues" |
+      "Bug Reports" | "Tracker"]`, `documentation` from
+      `project_urls["Documentation" | "Docs"]`. Case-insensitive
+      scan is used as a fallback so "source" lowercase still
+      resolves.
+- [x] License precedence: `info.license_expression` (PEP 639) →
+      mapping table over free-text `info.license` ("Apache 2.0" →
+      "Apache-2.0", "MIT License" → "MIT", "BSD" → "BSD-3-Clause",
+      etc.) → `looksLikeSPDXID(info.license)` bare-ID check →
+      classifier mapping (`License :: OSI Approved :: …` → SPDX).
+      Unresolved licenses drop the field with a `diag.Warn` telling
+      the user to pass `--license` explicitly.
+- [x] Hash: sdist SHA-256 wins over the first wheel SHA-256 when
+      both are present. No hash when no distributions are listed
+      (latest-only endpoint for some packages). Emitted as a
+      literal-form §8.1 hash entry.
+- [x] 429 Too Many Requests → `ErrRateLimited`. 404 → `ErrNotFound`
+      with a different message for missing-package vs missing-version.
+- [x] `BaseURL` field + `BOMTIQUE_PYPI_BASE_URL` env-var override.
+- [x] `init()` registers on the process-global registry.
+- [x] 16 httptest-backed tests: Matches matrix, URL + purl + `pypi:`
+      parsing, PEP 503 normalisation table, happy pinned fetch
+      (full fields + sdist digest), latest fallback, 404,
+      license-from-classifier, license unknown warns and drops,
+      license_expression wins, wheel-only digest, no-digest-no-hash,
+      maintainer fallback, case-insensitive project_urls, env-var
+      base URL, global registration, license text-mapping table,
+      429 rate-limit. Plus live smoke against pypi.org for
+      `pkg:pypi/requests@2.31.0` — name, version, description,
+      supplier, Apache-2.0 license, website/vcs/documentation
+      refs, and a real SHA-256 sdist digest all resolve. Full
+      `go test ./...` + `-race` + `golangci-lint` clean.
 
 ### M14.12 — Cargo importer
 
