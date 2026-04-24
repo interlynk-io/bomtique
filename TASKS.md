@@ -79,19 +79,38 @@ section a task implements.
 
 ## M3 — Hashing (`internal/hash`)
 
-- [ ] Algorithm allowlist: SHA-256, SHA-384, SHA-512, SHA-3-256, SHA-3-512 [§8.1].
-      Reject MD5, SHA-1, anything else with a named error.
-- [ ] Literal form passthrough (lowercase hex) [§8.1].
-- [ ] File form [§8.2]: open via `safefs`, hash, emit lowercase hex.
-- [ ] Directory digest [§8.3, §8.4]: recursive walk, skip dirs starting with
-      `.`, skip symlinks (dir and file), filter by lowercased `extensions`
-      (strip leading `*.` or `.`), reject empty result, per-file digest,
-      build `<hex><SP><SP><rel-path-with-slashes><LF>` lines sorted
-      byte-wise by relative path, final digest over UTF-8 bytes of that manifest.
-- [ ] Per-file size cap applied during the walk.
-- [ ] Golden tests with fixtures covering: nested dirs, hidden dirs, symlinks,
-      extension filter with and without leading dot, cross-platform paths
-      (store fixtures with forward slashes only).
+- [x] Algorithm allowlist: SHA-256, SHA-384, SHA-512, SHA-3-256, SHA-3-512 [§8.1].
+      `Parse` rejects MD5, SHA-1, and every other name (including case
+      variants and CycloneDX's `SHA3-*` form) with `ErrUnsupportedAlgorithm`.
+      `Algorithm.New()` pulls constructors from stdlib `crypto/sha256`,
+      `crypto/sha512`, and `crypto/sha3` (Go 1.25+ stdlib).
+- [x] Literal form passthrough (lowercase hex) [§8.1]: `ValidateLiteralValue`
+      checks length matches the algorithm's hex width and every byte is in
+      `[0-9a-f]`; M7 passes the value through without recomputation.
+- [x] File form [§8.2]: open via `safefs.Open` (symlink refusal + size cap),
+      stream into the hash, emit lowercase hex.
+- [x] Directory digest [§8.3, §8.4]: `filepath.WalkDir`-based walk, skip
+      dirs starting with `.` (returns `fs.SkipDir`), skip every symlink
+      (dir and file), skip hidden files at walked levels, filter by
+      case-insensitive extensions (strip leading `*.` or `.`, NFC-normalise
+      both sides per §4.6), reject empty result with `ErrEmptyDirectory`,
+      per-file digest with per-file size cap, NFC-normalise the forward-slash
+      relative path before adding to the manifest string, sort lines
+      byte-wise, final digest over UTF-8 bytes. Regular-file target falls
+      back to File form (§8.3 first bullet).
+- [x] Per-file size cap applied during the walk via `io.LimitReader(f, max+1)`
+      and byte-count check; overrun returns `safefs.ErrFileTooLarge`.
+- [x] Tests using `t.TempDir` fixtures (no committed binaries) with a
+      spec-literal reference reconstruction of the §8.4 algorithm, covering:
+      known FIPS 180-4 SHA-256 vector ("abc"), empty-file vector, nested
+      dirs, hidden-dir skip (`.git/`, `.venv/`), hidden-file skip, symlink
+      file and symlink directory skip, extension filter in bare / `.ext` /
+      `*.ext` forms with mixed-case basenames, forward-slash relative paths
+      across nested dirs, deterministic ordering from non-alphabetical
+      write order, SHA-256 vs SHA-3-256 distinctness, regular-file
+      fallback, per-file oversize rejection, missing target, empty
+      directory and empty-after-filter rejection, and hash package's own
+      negative cases for MD5/SHA-1 and invalid literal hex.
 
 ## M4 — Validation (`internal/manifest/validate`)
 
