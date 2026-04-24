@@ -33,6 +33,21 @@ func (v *validator) validateLicense(l *manifest.License, ptr string) {
 		return
 	}
 
+	// Optional strict check: does `expression` parse per the SPDX
+	// License Expression grammar (Annex D)?  Runs only when the caller
+	// opts in via Options.SPDXExpressionStrict.  The cheap token-
+	// containment check below still runs regardless.
+	if v.opts.SPDXExpressionStrict {
+		if err := parseSPDXExpression(expr); err != nil {
+			v.add(Error{
+				Kind:    ErrLicense,
+				Pointer: ptr + "/expression",
+				Value:   l.Expression,
+				Message: fmt.Sprintf("SPDX expression grammar error: %v", err),
+			})
+		}
+	}
+
 	tokens := expressionTokens(expr)
 
 	for i, t := range l.Texts {

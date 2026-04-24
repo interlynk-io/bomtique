@@ -72,9 +72,13 @@ milestone PRs.
 - **`--follow-symlinks` opt-in path.** Accepted but always falls back
   to refusal. The spec (§18.2) allows this as opt-in; we haven't
   implemented it yet.
-- **Full SPDX expression grammar check.** §6.3 allows but does not
-  require grammar validation. We do a cheap "id appears in expression"
-  check; `Options.SPDXExpressionStrict` is reserved for a future
-  grammar parser.
+- **SPDX expression grammar check.** Implemented as opt-in via
+  `Options.SPDXExpressionStrict`. When enabled, expressions are
+  parsed against the SPDX Annex D grammar — operator precedence,
+  balanced parens, `WITH` exception form, `LicenseRef-` /
+  `DocumentRef-` shapes, and `+` suffix placement. The cheap "id
+  appears in expression" check runs regardless. License-id list
+  lookup (against the official SPDX License List) is still out of
+  scope; bomtique validates structure, not semantic membership.
 - **Directory-walk fuzz target.** Covered by unit tests in
   `internal/hash/` but not by a corpus-seeded fuzz harness yet.
