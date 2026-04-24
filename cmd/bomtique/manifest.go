@@ -14,9 +14,16 @@ import (
 func newManifestCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "manifest",
-		Short: "Introspect the Component Manifest v1 schema",
+		Short: "Inspect and mutate Component Manifest v1 files",
 	}
-	cmd.AddCommand(newManifestSchemaCmd())
+	cmd.AddCommand(
+		newManifestSchemaCmd(),
+		newManifestInitCmd(),
+		newManifestAddCmd(),
+		newManifestRemoveCmd(),
+		newManifestUpdateCmd(),
+		newManifestPatchCmd(),
+	)
 	return cmd
 }
 
