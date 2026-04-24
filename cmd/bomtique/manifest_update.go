@@ -13,6 +13,7 @@ import (
 
 	"github.com/interlynk-io/bomtique/internal/diag"
 	"github.com/interlynk-io/bomtique/internal/manifest/mutate"
+	"github.com/interlynk-io/bomtique/internal/regfetch"
 )
 
 type updateFlags struct {
@@ -21,6 +22,8 @@ type updateFlags struct {
 	DryRun  bool
 	ToVer   string
 	ExtList []string
+	Offline bool
+	Online  bool
 
 	Name          string
 	Version       string
@@ -79,6 +82,8 @@ the value flags so an empty string can never mean "clear this field".`,
 	cmd.Flags().BoolVar(&f.DryRun, "dry-run", false, "report changes without writing")
 	cmd.Flags().StringVar(&f.ToVer, "to", "", "bump version (and purl version segment when they match)")
 	cmd.Flags().StringArrayVar(&f.ExtList, "external", nil, "external reference as type=url (repeatable)")
+	cmd.Flags().BoolVar(&f.Offline, "offline", false, "skip registry metadata refresh")
+	cmd.Flags().BoolVar(&f.Online, "online", false, "require a registered importer to refresh the target's metadata")
 
 	cmd.Flags().StringVar(&f.Name, "name", "", "rename component")
 	cmd.Flags().StringVar(&f.Version, "version", "", "replace version (use --to for lockstep purl bump)")
@@ -159,6 +164,9 @@ func runManifestUpdate(stdout, stderr io.Writer, f *updateFlags, ref string) err
 		ClearDependsOn:       f.ClearDependsOn,
 		ClearTags:            f.ClearTags,
 		ClearPedigreePatches: f.ClearPedigreePatches,
+
+		Offline: f.Offline,
+		Online:  f.Online,
 	}
 
 	res, err := mutate.Update(opts)
@@ -192,6 +200,13 @@ func mapUpdateError(err error) error {
 	}
 	if errors.Is(err, mutate.ErrUpdateNotFound) ||
 		errors.Is(err, mutate.ErrPrimaryNotFound) {
+		return newExitErr(exitValidationError, err)
+	}
+	if errors.Is(err, regfetch.ErrUnsupportedRef) ||
+		errors.Is(err, regfetch.ErrNetwork) ||
+		errors.Is(err, regfetch.ErrNotFound) ||
+		errors.Is(err, regfetch.ErrRateLimited) ||
+		errors.Is(err, regfetch.ErrResponseTooLarge) {
 		return newExitErr(exitValidationError, err)
 	}
 	return newExitErr(exitValidationError, err)

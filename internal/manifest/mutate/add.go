@@ -4,6 +4,7 @@
 package mutate
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/interlynk-io/bomtique/internal/manifest/validate"
 	"github.com/interlynk-io/bomtique/internal/pool"
 	"github.com/interlynk-io/bomtique/internal/purl"
+	"github.com/interlynk-io/bomtique/internal/regfetch"
 	"github.com/interlynk-io/bomtique/internal/safefs"
 )
 
@@ -86,6 +88,27 @@ type AddOptions struct {
 	UpstreamSupplier string
 	UpstreamWebsite  string
 	UpstreamVCS      string
+
+	// Registry-metadata import (M14.7). When Offline is true, the
+	// import step is skipped regardless of whether any importer
+	// would match the ref. When Online is true, a matching importer
+	// MUST claim the ref or Add fails with ErrUnsupportedRef. Default
+	// behaviour (both false): auto-fetch when an importer matches,
+	// skeleton otherwise.
+	Offline bool
+	Online  bool
+
+	// Registry lets tests inject an isolated Importer set. Nil
+	// falls back to the process-global regfetch.Default().
+	Registry *regfetch.Registry
+
+	// Client lets tests inject a custom regfetch.Client (e.g. with a
+	// stub HTTP transport). Nil constructs a fresh default client.
+	Client *regfetch.Client
+
+	// Ctx is the context threaded through every regfetch call. Nil
+	// uses context.Background().
+	Ctx context.Context
 }
 
 // AddResult reports the outcome of an Add call.
@@ -130,10 +153,31 @@ var ErrInvalidRef = errors.New("cannot derive depends-on ref: need --purl, or bo
 // Add is the entry point for `bomtique manifest add`. It routes to the
 // pool-add or primary-depends-on path based on opts.Primary.
 func Add(opts AddOptions) (*AddResult, error) {
+	if opts.Offline && opts.Online {
+		return nil, errors.New("--offline and --online are mutually exclusive")
+	}
 	base, err := readFromSource(opts)
 	if err != nil {
 		return nil, err
 	}
+
+	// Registry-metadata import: attempted before the flag layer so
+	// flag values win over anything the importer produced. The choice
+	// of ref follows: explicit --purl when present; else the Name
+	// field (used for `https://github.com/...` URLs fed as the name).
+	// In practice the CLI surfaces a dedicated arg for this path;
+	// tests drive it via the FromPath or direct AddOptions shape.
+	if fetched, err := tryRegfetch(opts); err != nil {
+		return nil, err
+	} else if fetched != nil {
+		if base == nil {
+			base = fetched
+		} else {
+			merged, _ := MergeComponent(fetched, base)
+			base = merged
+		}
+	}
+
 	flagLayer := buildFlagComponent(opts)
 	merged, overrides := MergeComponent(base, flagLayer)
 	if merged == nil {
@@ -501,6 +545,67 @@ func formatFor(path string) manifest.Format {
 		return manifest.FormatCSV
 	}
 	return manifest.FormatJSON
+}
+
+// tryRegfetch implements the import step of M14.7:
+//
+//   - --offline: never fetches, returns (nil, nil).
+//   - --online: requires an importer to match the supplied ref;
+//     errors with ErrUnsupportedRef otherwise.
+//   - default: auto-fetches when an importer matches, returns
+//     (nil, nil) when none does (skeleton path).
+//
+// The ref is picked from opts.Purl first (must start with "pkg:"),
+// falling back to opts.Name when it parses as a URL. Callers who
+// want a different ref precedence set opts.Purl explicitly to the
+// string they want fetched.
+func tryRegfetch(opts AddOptions) (*manifest.Component, error) {
+	if opts.Offline {
+		return nil, nil
+	}
+	ref := pickFetchRef(opts)
+	registry := opts.Registry
+	if registry == nil {
+		registry = regfetch.Default()
+	}
+
+	if ref == "" {
+		if opts.Online {
+			return nil, fmt.Errorf("%w: --online requires a --purl or URL-shaped --name", regfetch.ErrUnsupportedRef)
+		}
+		return nil, nil
+	}
+	imp := registry.Match(ref)
+	if imp == nil {
+		if opts.Online {
+			return nil, fmt.Errorf("%w: %q", regfetch.ErrUnsupportedRef, ref)
+		}
+		return nil, nil
+	}
+
+	client := opts.Client
+	if client == nil {
+		client = regfetch.NewClient()
+	}
+	ctx := opts.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return imp.Fetch(ctx, client, ref)
+}
+
+// pickFetchRef chooses the string regfetch will receive. Purl wins
+// because it's the canonical form spec §11 cares about; URL-shaped
+// names are accepted too for users pasting a GitHub repo URL as
+// --name. The function returns "" when neither field is usable.
+func pickFetchRef(opts AddOptions) string {
+	if p := strings.TrimSpace(opts.Purl); strings.HasPrefix(p, "pkg:") {
+		return p
+	}
+	if n := strings.TrimSpace(opts.Name); strings.HasPrefix(n, "http://") || strings.HasPrefix(n, "https://") {
+		return n
+	}
+	return ""
 }
 
 // repoHostPurlTypes are the purl types §9.3 pattern 1 supports for

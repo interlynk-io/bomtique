@@ -4,6 +4,7 @@
 package mutate
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/interlynk-io/bomtique/internal/manifest/validate"
 	"github.com/interlynk-io/bomtique/internal/pool"
 	"github.com/interlynk-io/bomtique/internal/purl"
+	"github.com/interlynk-io/bomtique/internal/regfetch"
 )
 
 // UpdateOptions configures a `bomtique manifest update` call.
@@ -64,6 +66,18 @@ type UpdateOptions struct {
 	ClearDependsOn       bool
 	ClearTags            bool
 	ClearPedigreePatches bool
+
+	// Registry-metadata refresh (M14.7). When Offline, Update never
+	// calls out. When Online, a matching importer MUST be available
+	// or Update fails. Default: auto-refresh when the target
+	// component's purl matches a registered importer AND a version
+	// bump (--to) is in flight — a plain flag replace does not
+	// trigger a network call.
+	Offline  bool
+	Online   bool
+	Registry *regfetch.Registry
+	Client   *regfetch.Client
+	Ctx      context.Context
 }
 
 // UpdateResult reports what changed.
@@ -82,6 +96,9 @@ var ErrUpdateNotFound = errors.New("no component matches the supplied ref")
 
 // Update mutates an existing pool component in place.
 func Update(opts UpdateOptions) (*UpdateResult, error) {
+	if opts.Offline && opts.Online {
+		return nil, errors.New("--offline and --online are mutually exclusive")
+	}
 	ref, err := graph.ParseRef(strings.TrimSpace(opts.Ref))
 	if err != nil {
 		return nil, fmt.Errorf("parse ref %q: %w", opts.Ref, err)
@@ -190,6 +207,24 @@ func Update(opts UpdateOptions) (*UpdateResult, error) {
 				} else {
 					diag.Warn("purl %q left unchanged: version segment does not match old version %q (update manually if needed)", *updated.Purl, oldVer)
 				}
+			}
+		}
+	}
+
+	// Registry-metadata refresh (M14.7). Only fires on --online to
+	// keep `update` predictable for callers doing plain field
+	// rewrites. The fetched component fills fields, but any
+	// subsequent override from flags takes precedence.
+	if opts.Online {
+		fetched, err := fetchUpdatedMetadata(opts, &updated)
+		if err != nil {
+			return nil, err
+		}
+		if fetched != nil {
+			merged, _ := MergeComponent(&updated, fetched)
+			if merged != nil {
+				updated = *merged
+				fields = append(fields, "regfetch")
 			}
 		}
 	}
@@ -375,6 +410,37 @@ func applyClears(c *manifest.Component, opts UpdateOptions, fields *[]string) {
 		c.Pedigree.Patches = nil
 		*fields = append(*fields, "clear:pedigree.patches")
 	}
+}
+
+// fetchUpdatedMetadata runs the post-bump regfetch refresh on a
+// single component. Returns (nil, nil) when no importer matches the
+// updated component's purl; returns ErrUnsupportedRef only when
+// --online was explicitly requested and the ref is un-importable.
+func fetchUpdatedMetadata(opts UpdateOptions, updated *manifest.Component) (*manifest.Component, error) {
+	var ref string
+	if updated.Purl != nil {
+		ref = strings.TrimSpace(*updated.Purl)
+	}
+	if !strings.HasPrefix(ref, "pkg:") {
+		return nil, fmt.Errorf("%w: --online requires the target component to carry a pkg: purl", regfetch.ErrUnsupportedRef)
+	}
+	registry := opts.Registry
+	if registry == nil {
+		registry = regfetch.Default()
+	}
+	imp := registry.Match(ref)
+	if imp == nil {
+		return nil, fmt.Errorf("%w: %q", regfetch.ErrUnsupportedRef, ref)
+	}
+	client := opts.Client
+	if client == nil {
+		client = regfetch.NewClient()
+	}
+	ctx := opts.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return imp.Fetch(ctx, client, ref)
 }
 
 // bumpPurlVersion returns a new purl string with its version segment

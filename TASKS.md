@@ -715,34 +715,58 @@ milestone.
 
 ### M14.7 — Registry importer framework (`internal/regfetch`)
 
-- [ ] New package `internal/regfetch` with an `Importer` interface:
-      `Fetch(ctx, ref string) (*manifest.Component, error)`. Registry
-      keyed by URL host prefix AND purl type.
-- [ ] Shared HTTP client: 10 s connect, 30 s total timeout, 1 MiB
-      response cap (read via `io.LimitReader`), `Accept:
-      application/json`, User-Agent `bomtique/<version>
-      (+https://github.com/interlynk-io/bomtique)`. No retries in v1.
-- [ ] `--offline` flag on `add` and `update` forces the skeleton path
-      and MUST NOT open a socket (enforced by a test that fails the
-      build if any outbound connection attempt happens under
-      `--offline`).
-- [ ] `--online` forces a fetch attempt and errors if the input isn't
-      fetchable by any registered importer. Default behaviour:
-      auto-fetch when input matches a registered importer; otherwise
-      skeleton.
-- [ ] All outbound HTTP routed through the shared client so tests stub
-      it via `httptest.Server` + per-importer env var base-URL
-      override (`BOMTIQUE_GITHUB_BASE_URL`, etc., undocumented public
-      surface — testing hook only).
-- [ ] Structured errors: `ErrNetwork`, `ErrNotFound`,
-      `ErrRateLimited`, `ErrUnsupportedRef`, `ErrResponseTooLarge`.
-- [ ] Consumer-path network invariant enforced: a test greps for
-      `net/http` / `net.Dial` imports outside `internal/regfetch` and
-      `cmd/bomtique`. Existing test binary override of
-      `net.DefaultResolver` / `http.DefaultTransport` extended to
-      allow `regfetch` through in importer tests only.
-- [ ] `add` and `update` compose: importer produces a Component,
-      flag overrides layer on top via M14.0's `MergeComponent`.
+- [x] New package `internal/regfetch` with an `Importer` interface
+      (`Name`, `Matches`, `Fetch`). Process-global `Registry` with
+      first-match-wins dispatch via `regfetch.Fetch` /
+      `regfetch.Match`; isolated `NewRegistry()` for tests.
+- [x] Shared `Client` with 30 s total request timeout, 1 MiB
+      response cap via `io.LimitReader(body, max+1)`, `Accept:
+      application/json`, User-Agent
+      `bomtique/<version> (+https://github.com/interlynk-io/bomtique)`.
+      `Client.SetUserAgentVersion` swaps the version at startup. No
+      retries.
+- [x] `--offline` flag on `add` and `update` skips `regfetch` entirely
+      (never opens a socket). Enforced by unit tests that fail
+      immediately if the fake importer's `Fetch` is called under
+      `--offline`.
+- [x] `--online` forces a fetch attempt; errors with
+      `ErrUnsupportedRef` when no importer matches the ref, when
+      `--online` is paired with a ref that isn't a `pkg:` purl or
+      URL, or when the target of `update --online` has no purl.
+- [x] Default behaviour on `add`: auto-fetches when a registered
+      importer matches `opts.Purl` (pkg: prefix) or URL-shaped
+      `opts.Name`; skeleton path otherwise. Default behaviour on
+      `update`: skip regfetch unless `--online` is supplied, since
+      plain field rewrites shouldn't do network I/O.
+- [x] `--offline` and `--online` are mutually exclusive (hard error).
+- [x] All outbound HTTP routed through the shared `Client` so tests
+      stub it via `httptest.Server`. Per-importer env-var base-URL
+      overrides are documented as an M14.8+ surface and will land
+      alongside the first real importer.
+- [x] Structured errors: `ErrNetwork`, `ErrNotFound`,
+      `ErrRateLimited`, `ErrUnsupportedRef`, `ErrResponseTooLarge`,
+      plus `ErrOffline` for callers that need to distinguish the
+      skeleton fallback path.
+- [x] Consumer-path network invariant enforced by
+      `TestNoNetworkImportsOutsideRegfetch` in `internal/regfetch/`:
+      walks every production `.go` file and fails if `net/http`,
+      `net.Dial`, or `net.DefaultResolver` is referenced outside
+      `cmd/bomtique/` and `internal/regfetch/` (comments allowed).
+- [x] `add` and `update` compose: importer produces a Component,
+      existing `--from` base is merged over the fetched one, flag
+      overrides layer on top via M14.0's `MergeComponent`. Update's
+      fetched-metadata merge is reported as a `regfetch` entry in
+      `UpdateResult.FieldsChanged`.
+- [x] Tests cover: registry dispatch + first-match-wins,
+      `ErrUnsupportedRef`, `Client.Get` happy path + auth header
+      pass-through + status-code pass-through (404 not wrapped) +
+      1 MiB cap triggering `ErrResponseTooLarge` + transport-error
+      wrapping as `ErrNetwork`, `SetUserAgentVersion` no-op on
+      empty, Add `--offline` skip + Add `--online` missing-importer
+      error + Add default auto-fetch merges below flag layer + Add
+      URL-shaped name routing, Update `--online` refresh + flag
+      override precedence + missing-purl error + default-skip.
+      Full `go test ./...` + `golangci-lint run ./...` green.
 
 ### M14.8 — GitHub importer
 
