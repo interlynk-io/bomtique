@@ -147,17 +147,32 @@ section a task implements.
 
 ## M5 — Pool construction, identity, dedup (`internal/pool`)
 
-- [ ] Canonical-form purl comparison [§9.3]: already provided by
-      `internal/purl.CanonEqual(a, b string) (bool, error)`. M5 just wires
-      it into identity and dedup code paths.
-- [ ] Identity extraction [§11]: precedence purl → (name, version) → name.
-- [ ] Primary vs pool distinctness check within a single emission [§11].
-- [ ] Pool dedup passes [§11]:
-  - direct identity pass (four warning cases with first-occurrence keep).
-  - secondary mixed purl / no-purl pass: build `(name,version) → purl-bearing`
-    index; merge no-purl matches; keep purl-bearing values on conflict,
-    warn per conflicting field.
-- [ ] Each warning goes through `internal/diag` with `warning:` stderr prefix [§13.3].
+- [x] Canonical-form purl comparison [§9.3]: `Identify` canonicalises via
+      `internal/purl.Parse` + `String`, so identity keys compare byte-exact
+      on the canonical form.
+- [x] Identity extraction [§11]: `pool.Identity` + `Identify()` with Kind
+      precedence purl → name+version → name-only; name-only is the §11
+      fallback rung, emptied of version and purl.
+- [x] Primary vs pool distinctness check within a single emission [§11]:
+      `pool.CheckPrimaryDistinct(primary, pool)` returns a hard error on
+      same-Kind identity collision.
+- [x] Pool dedup passes [§11]:
+  - [x] Direct-identity pass (`directIdentityPass`): four warning cases —
+        duplicate purl (drop), same (name, version) with differing purls
+        (keep both, warn "likely upstream collision"), no-purl dup (drop),
+        name-only dup (drop). First occurrence wins.
+  - [x] Secondary mixed purl / no-purl pass (`secondaryPass`): builds
+        `(name, version) → purl-bearing` index; merges no-purl matches via
+        `mergeNoPurlInto`, keeping purl-bearing scalars / arrays and
+        warning per field conflict. Scalar pointer fields merge via
+        `mergePtrString`; slice fields via generic `mergeSlice` (for
+        comparable elements) or `mergeStringSlice` (for plain strings).
+        Object-valued fields (supplier, license, pedigree) compared via
+        dedicated `*Equal` helpers.
+- [x] Every warning routes through `internal/diag.Warn` (the §13.3 stderr
+      `warning:` channel); messages cite source-manifest provenance as
+      `path.json#/components/<index>` so operators can locate the
+      offending entries.
 
 ## M6 — Dependency resolution and reachability (`internal/graph`)
 
