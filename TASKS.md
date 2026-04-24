@@ -114,26 +114,36 @@ section a task implements.
 
 ## M4 — Validation (`internal/manifest/validate`)
 
-- [ ] Structural validator matching Appendix A's intended shape (build a Go
-      schema: required fields, type predicates, enum membership).
-- [ ] Semantic validator [§13.2]:
-  - name non-empty; at least one of version/purl/hashes [§6.1].
-  - each hash is exactly one form.
-  - file/dir hashes resolve and directory produces ≥ 1 file.
-  - algorithms in the permitted set.
-  - path traversal and symlink rules (covered by safefs).
-  - patched-purl rule [§9.3]: canonical-form purl of component differs from
-    every `pedigree.ancestors[].purl`.
-  - enumerations for `type`, `scope`, `external_references[].type`,
-    `patches[].type`, `lifecycles[].phase`.
-  - license object: `expression` required; every `texts[].id` is a simple
-    SPDX id that appears as a bare identifier within `expression`; exactly
-    one of `text` or `file` per texts entry; optional SPDX-expression grammar check.
-  - multi-primary: every primary has non-empty `depends-on` [§10.4].
-  - processing-set is non-empty of primaries [§12.1].
-  - at least one components manifest is allowed to be absent.
-- [ ] Error surface carries: manifest path, JSON pointer (when JSON), CSV
-      row/column (when CSV), offending value. No panics in validation.
+- [x] Structural / semantic validator implemented in Go (`internal/manifest/validate`).
+      The canonical JSON Schema 2020-12 document that Appendix A reserves
+      is still outstanding — M9's `bomtique manifest schema` will emit
+      it once authored.
+- [x] Semantic validator [§13.2]:
+  - [x] name non-empty; at least one of version/purl/hashes [§6.1].
+  - [x] each hash is exactly one form (literal / file / path).
+  - [x] file/dir hashes resolve and directory produces ≥ 1 file under the
+        §8.4 walk; filesystem checks skippable via `Options.SkipFilesystem`.
+  - [x] algorithms in the permitted set (SHA-256, SHA-384, SHA-512,
+        SHA-3-256, SHA-3-512); literal values validated for lowercase hex
+        and algorithm-correct length.
+  - [x] path traversal, absolute-form, and symlink rules delegated to safefs.
+  - [x] patched-purl rule [§9.3] via `internal/purl.CanonEqual`, skipping
+        silently when either side fails to parse (ErrPurlParse already raised).
+  - [x] enumerations for `type`, `scope`, `external_references[].type`,
+        `patches[].type`, `lifecycles[].phase` (all case-sensitive per §7).
+  - [x] license object: `expression` required; every `texts[].id` is a
+        simple SPDX identifier that appears as a bare token in `expression`
+        after stripping `AND`/`OR`/`WITH`/parens/`+`; exactly one of
+        `text` or `file` per texts entry. Full SPDX grammar reserved for
+        `Options.SPDXExpressionStrict` (not yet enabled).
+  - [x] multi-primary: every primary has non-empty `depends-on` [§10.4].
+  - [x] processing-set is non-empty of primaries [§12.1]; a single primary
+        may omit depends-on (convenience rule).
+  - [x] empty `components[]` in a components manifest rejected [§5.2].
+- [x] Error surface carries: manifest path, JSON pointer (JSON inputs),
+      row number + CSV column name (CSV inputs) via `pointerToRowColumn`,
+      offending value, and a `Kind` classifier for programmatic filtering.
+      No panics.
 
 ## M5 — Pool construction, identity, dedup (`internal/pool`)
 
