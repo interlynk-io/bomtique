@@ -15,6 +15,39 @@ func newManifestCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "manifest",
 		Short: "Inspect and mutate Component Manifest v1 files",
+		Long: `manifest scaffolds and edits .primary.json and .components.json files.
+
+All mutation subcommands share a common grammar:
+
+  <ref>               accepted by remove / update / patch — either
+                      pkg:<type>/<name>[@<version>] or <name>@<version>
+  -C, --chdir <dir>   run from this directory (default: CWD)
+  --into <path>       explicit target components manifest; otherwise the
+                      nearest .components.json walking up from CWD is used,
+                      or one is created alongside the primary on first add
+  --dry-run           (add/remove/update/patch) report the plan; do not write
+
+Component types (spec §7.1): library, application, framework, container,
+operating-system, device, firmware, file, platform, device-driver,
+machine-learning-model, data.
+
+Scopes (§7.2): required, optional, excluded.
+
+External-reference types (§7.3): website, vcs, documentation, issue-tracker,
+distribution, support, release-notes, advisories, other.
+
+Patch types (§7.4): unofficial, monkey, backport, cherry-pick.
+
+Registry importers used by 'add' / 'update' --online:
+  pkg:github/<owner>/<repo>[@<ref>]         or a github.com URL
+  pkg:gitlab/<group>/.../<proj>[@<ref>]     or a gitlab.com URL
+  pkg:npm/<name>[@<ver>]                    or npmjs.com URL
+  pkg:pypi/<name>[@<ver>]                   or pypi.org URL
+  pkg:cargo/<name>[@<ver>]                  or crates.io URL
+Auth env: GITHUB_TOKEN, GITLAB_TOKEN. Override base URLs with
+BOMTIQUE_{GITHUB,GITLAB,NPM,PYPI,CARGO}_BASE_URL.
+
+Exit codes: see 'bomtique --help'.`,
 	}
 	cmd.AddCommand(
 		newManifestSchemaCmd(),
@@ -31,10 +64,18 @@ func newManifestSchemaCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "schema",
 		Short: "Print the Component Manifest v1 JSON Schema (draft 2020-12)",
-		Long: `Prints the JSON Schema draft 2020-12 document describing Component Manifest v1
-shapes. The canonical schema referenced by spec Appendix A is still TODO; the
-output here is a placeholder identifying the v1 markers, ready for schema
-authoring in a follow-up PR.`,
+		Long: `Prints a JSON Schema draft 2020-12 document for Component Manifest v1 on
+stdout.
+
+Note: this is a PLACEHOLDER schema. It validates only the two top-level
+schema markers (primary-manifest/v1 and component-manifest/v1); field-level
+rules are enforced by the Go validator, which you can run via
+'bomtique validate'. The canonical schema referenced by spec Appendix A is
+still being authored.
+
+Examples:
+  bomtique manifest schema | jq .
+  bomtique manifest schema > schema.json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runManifestSchema(cmd.OutOrStdout())
 		},

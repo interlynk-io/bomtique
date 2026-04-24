@@ -42,15 +42,28 @@ func newManifestInitCmd() *cobra.Command {
 		Use:   "init",
 		Short: "Scaffold a new .primary.json in the target directory",
 		Long: `init writes a new primary manifest (.primary.json) using the supplied
-flag values. It runs the same semantic validation bomtique applies at scan
-time before writing, so missing required fields or invalid SPDX expressions
-are caught up-front.
+flag values. It runs the same semantic validation scan applies before writing,
+so missing required fields or invalid SPDX expressions are caught up-front.
 
-The command does not create a .components.json — §5.2 forbids an empty pool.
-The first ` + "`bomtique manifest add`" + ` call creates that file on demand.
+The command does NOT create a .components.json — §5.2 forbids an empty pool.
+The first 'bomtique manifest add' call creates that file on demand.
 
-Use --force to overwrite an existing .primary.json. Unknown top-level keys
-and unknown fields on the primary component are carried over.`,
+--force overwrites an existing .primary.json. Unknown top-level keys and
+unknown fields on the primary component are carried over across re-init.
+
+On success prints 'wrote <path>' or 'overwrote <path>' to stdout.
+
+Examples:
+  bomtique manifest init --name acme-app --version 1.0.0 --license Apache-2.0
+
+  bomtique manifest init --name acme-app --version 1.0.0 \
+    --license Apache-2.0 \
+    --purl pkg:github/acme/app@1.0.0 \
+    --supplier "Acme Corp" --supplier-email ops@acme.example \
+    --website https://acme.example --vcs https://github.com/acme/app \
+    --issue-tracker https://github.com/acme/app/issues
+
+  bomtique manifest init -C ./new-service --name svc --version 0.1.0 --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runManifestInit(cmd.OutOrStdout(), cmd.ErrOrStderr(), f)
 		},
@@ -61,11 +74,14 @@ and unknown fields on the primary component are carried over.`,
 
 	cmd.Flags().StringVar(&f.Name, "name", "", "primary component name (required)")
 	cmd.Flags().StringVar(&f.Version, "version", "", "primary component version")
-	cmd.Flags().StringVar(&f.Type, "type", "", "component type (default: application)")
+	cmd.Flags().StringVar(&f.Type, "type", "",
+		"component type: library|application|framework|container|operating-system|"+
+			"device|firmware|file|platform|device-driver|machine-learning-model|data "+
+			"(default: application)")
 	cmd.Flags().StringVar(&f.Description, "description", "", "human-readable description")
-	cmd.Flags().StringVar(&f.License, "license", "", "SPDX license expression")
-	cmd.Flags().StringVar(&f.Purl, "purl", "", "Package URL identifying the primary")
-	cmd.Flags().StringVar(&f.CPE, "cpe", "", "CPE 2.3 identifier")
+	cmd.Flags().StringVar(&f.License, "license", "", "SPDX license expression (e.g. Apache-2.0, MIT OR GPL-2.0)")
+	cmd.Flags().StringVar(&f.Purl, "purl", "", "Package URL identifying the primary (e.g. pkg:github/acme/app@1.0.0)")
+	cmd.Flags().StringVar(&f.CPE, "cpe", "", "CPE 2.3 identifier (e.g. cpe:2.3:a:acme:app:1.0.0:*:*:*:*:*:*:*)")
 
 	cmd.Flags().StringVar(&f.Supplier, "supplier", "", "supplier name")
 	cmd.Flags().StringVar(&f.SupplierEmail, "supplier-email", "", "supplier email")

@@ -59,38 +59,108 @@ func newManifestAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add a component to a components manifest or a ref to the primary's depends-on",
-		Long: `add builds a Component from flag values (optionally layered on top of a
---from <path|-> base) and writes it to the nearest components manifest. Use
---primary to append to the primary manifest's depends-on list instead.
+		Long: `add builds a Component and writes it to the nearest components manifest
+(pool). With --primary it instead appends a ref to the primary's depends-on.
 
-The default target is the first .components.json (or .components.csv) found
-walking up from the starting directory; if none exists, one is created
-alongside the primary. Override with --into <path>.
+Target resolution (pool mode):
+  default:   nearest .components.json or .components.csv walking up from -C
+             (or CWD). Created alongside the primary if none exists.
+  --into:    explicit path; honoured verbatim.
+
+Input sources (merged in order, later layers win):
+  1. --from <path|->   a JSON file containing a bare Component object, or
+                       '-' to read one from stdin. Fields not in the file
+                       are left unset.
+  2. Registry import   when the chosen ref (--purl, else --name used as a
+                       URL) matches a registered importer (github, gitlab,
+                       npm, pypi, cargo). See 'bomtique manifest --help'.
+                       --offline skips this step; --online requires a match.
+  3. CLI flags         every --name/--version/--license/... value supplied.
+                       Each override prints one 'warning: flag --X overrode
+                       field Y from --from input' line on stderr.
+
+License with per-ID texts / files (§6.3): supply them in a --from JSON file
+under the 'license.texts[]' array. Each entry needs 'id' plus exactly one
+of 'text' (inline) or 'file' (relative path, read at scan time).
+
+Hash directives (§8): --vendored-at installs a directory-form hash for you
+(see below). Other hash shapes — literal values, explicit file targets,
+extra algorithms — must come in via --from so all fields line up.
+
+Vendored components (§9.3): --vendored-at <dir> synthesises three fields
+at once:
+  * a repo-local purl derived from the primary's purl (unless --purl was
+    set explicitly);
+  * one directory-form SHA-256 hash directive on that path (digest is
+    computed at scan time, not now — edit freely until then);
+  * pedigree.ancestors[0] built from the --upstream-* flags. --upstream-name
+    and one of --upstream-version / --upstream-purl are required when any
+    --upstream-* flag is supplied.
+--ext filters the directory-hash walk to a case-insensitive extension set
+(e.g. --ext c,h,cpp). Ignored when --vendored-at points at a regular file.
 
 CSV targets reject fields CSV cannot represent (external_references,
-structured license texts, directory-form hashes, pedigree, lifecycles); the
-error suggests rerunning with --into <json-path>.`,
+structured license texts, directory-form hashes, pedigree, lifecycles).
+The error tells you to rerun with --into <json-path>.
+
+Identity collisions against the existing pool (§11) are rejected hard.
+
+On success prints one of (to stdout):
+  created <path>                                 new components file was seeded
+  updated <path>                                 pool entry appended
+  added <ref> to <primary> depends-on            --primary path
+  unchanged <primary> (ref "<ref>" already in depends-on)
+
+Examples:
+  # flag-driven pool add
+  bomtique manifest add \
+    --name libx --version 1.0 --license MIT \
+    --purl pkg:generic/acme/libx@1.0
+
+  # from a JSON file (license.texts, hashes, pedigree come from the file)
+  bomtique manifest add --from ./incoming/libx.json
+
+  # online import — name/version/license/... lifted from npm, flags win
+  bomtique manifest add --online --purl pkg:npm/express@4.18.2
+
+  # vendored component with directory-hash and upstream ancestor
+  bomtique manifest add \
+    --name vendor-libx --version 2.4.0 \
+    --vendored-at ./src/vendor-libx --ext c,h \
+    --upstream-name libx --upstream-version 2.4.0 \
+    --upstream-purl pkg:github/upstream-org/libx@2.4.0 \
+    --upstream-supplier "Upstream Inc"
+
+  # append to the primary's depends-on instead of the pool
+  bomtique manifest add --primary \
+    --name libx --version 1.0 --purl pkg:generic/acme/libx@1.0`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runManifestAdd(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, cmd.InOrStdin())
 		},
 	}
 
 	cmd.Flags().StringVarP(&f.Dir, "chdir", "C", "", "run in this directory (default: CWD)")
-	cmd.Flags().StringVar(&f.Into, "into", "", "explicit target components manifest path")
-	cmd.Flags().BoolVar(&f.Primary, "primary", false, "append to the primary manifest's depends-on instead of a pool")
-	cmd.Flags().StringVar(&f.From, "from", "", "path to a Component JSON file, or - for stdin")
-	cmd.Flags().StringArrayVar(&f.External, "external", nil, "additional external reference as type=url (repeatable)")
-	cmd.Flags().BoolVar(&f.Offline, "offline", false, "skip all registry metadata fetches (no network)")
-	cmd.Flags().BoolVar(&f.Online, "online", false, "require a registered importer to match the ref (errors if none does)")
+	cmd.Flags().StringVar(&f.Into, "into", "", "explicit target components manifest path (overrides auto-discovery)")
+	cmd.Flags().BoolVar(&f.Primary, "primary", false, "append to the primary manifest's depends-on instead of the pool")
+	cmd.Flags().StringVar(&f.From, "from", "",
+		"path to a Component JSON file (bare Component object), or '-' to read one from stdin")
+	cmd.Flags().StringArrayVar(&f.External, "external", nil,
+		"extra external reference as type=url (repeatable); type is one of website|vcs|documentation|"+
+			"issue-tracker|distribution|support|release-notes|advisories|other")
+	cmd.Flags().BoolVar(&f.Offline, "offline", false, "skip all registry metadata fetches (no network; mutually exclusive with --online)")
+	cmd.Flags().BoolVar(&f.Online, "online", false, "require a registered importer to match the ref; fail if none does")
 
 	cmd.Flags().StringVar(&f.Name, "name", "", "component name")
 	cmd.Flags().StringVar(&f.Version, "version", "", "component version")
-	cmd.Flags().StringVar(&f.Type, "type", "", "component type (default: library)")
+	cmd.Flags().StringVar(&f.Type, "type", "",
+		"component type: library|application|framework|container|operating-system|"+
+			"device|firmware|file|platform|device-driver|machine-learning-model|data "+
+			"(default: library)")
 	cmd.Flags().StringVar(&f.Description, "description", "", "human-readable description")
-	cmd.Flags().StringVar(&f.License, "license", "", "SPDX license expression")
-	cmd.Flags().StringVar(&f.Purl, "purl", "", "Package URL")
+	cmd.Flags().StringVar(&f.License, "license", "", "SPDX license expression (use --from for structured license texts)")
+	cmd.Flags().StringVar(&f.Purl, "purl", "", "Package URL; drives registry-importer matching (e.g. pkg:npm/express@4.18.2)")
 	cmd.Flags().StringVar(&f.CPE, "cpe", "", "CPE 2.3 identifier")
-	cmd.Flags().StringVar(&f.Scope, "scope", "", "required|optional|excluded (pool only)")
+	cmd.Flags().StringVar(&f.Scope, "scope", "", "pool-entry scope: required|optional|excluded (ignored on --primary)")
 
 	cmd.Flags().StringVar(&f.Supplier, "supplier", "", "supplier name")
 	cmd.Flags().StringVar(&f.SupplierEmail, "supplier-email", "", "supplier email")
@@ -101,17 +171,22 @@ error suggests rerunning with --into <json-path>.`,
 	cmd.Flags().StringVar(&f.Distribution, "distribution", "", "external reference (distribution)")
 	cmd.Flags().StringVar(&f.IssueTracker, "issue-tracker", "", "external reference (issue-tracker)")
 
-	cmd.Flags().StringArrayVar(&f.DependsOn, "depends-on", nil, "depends-on ref (repeatable)")
-	cmd.Flags().StringArrayVar(&f.Tags, "tag", nil, "component tag (repeatable)")
+	cmd.Flags().StringArrayVar(&f.DependsOn, "depends-on", nil,
+		"depends-on ref as pkg:<type>/<name>[@<ver>] or <name>@<ver> (repeatable)")
+	cmd.Flags().StringArrayVar(&f.Tags, "tag", nil, "component tag for --tag filtering at scan time (repeatable)")
 
-	cmd.Flags().StringVar(&f.VendoredAt, "vendored-at", "", "relative path to the vendored source directory (§9.3)")
-	cmd.Flags().StringSliceVar(&f.Extensions, "ext", nil, "hash extension filter (repeatable or comma-separated): c,h,cpp")
-	cmd.Flags().StringVar(&f.UpstreamName, "upstream-name", "", "upstream ancestor name (§9.1)")
-	cmd.Flags().StringVar(&f.UpstreamVersion, "upstream-version", "", "upstream ancestor version")
-	cmd.Flags().StringVar(&f.UpstreamPurl, "upstream-purl", "", "upstream ancestor purl")
-	cmd.Flags().StringVar(&f.UpstreamSupplier, "upstream-supplier", "", "upstream ancestor supplier name")
-	cmd.Flags().StringVar(&f.UpstreamWebsite, "upstream-website", "", "upstream ancestor website URL")
-	cmd.Flags().StringVar(&f.UpstreamVCS, "upstream-vcs", "", "upstream ancestor VCS URL")
+	cmd.Flags().StringVar(&f.VendoredAt, "vendored-at", "",
+		"relative path to vendored source dir; installs a directory-form SHA-256 hash directive")
+	cmd.Flags().StringSliceVar(&f.Extensions, "ext", nil,
+		"directory-hash extension filter (case-insensitive, comma-separated): e.g. c,h,cpp")
+	cmd.Flags().StringVar(&f.UpstreamName, "upstream-name", "",
+		"ancestor name for pedigree.ancestors[0] (required with any --upstream-* flag)")
+	cmd.Flags().StringVar(&f.UpstreamVersion, "upstream-version", "",
+		"ancestor version (one of --upstream-version / --upstream-purl is required)")
+	cmd.Flags().StringVar(&f.UpstreamPurl, "upstream-purl", "", "ancestor purl (must differ from the component's own purl)")
+	cmd.Flags().StringVar(&f.UpstreamSupplier, "upstream-supplier", "", "ancestor supplier name")
+	cmd.Flags().StringVar(&f.UpstreamWebsite, "upstream-website", "", "ancestor website URL")
+	cmd.Flags().StringVar(&f.UpstreamVCS, "upstream-vcs", "", "ancestor VCS URL")
 
 	return cmd
 }

@@ -30,22 +30,56 @@ func newManifestPatchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "patch <ref> <diff-path>",
 		Short: "Register a pedigree patch on a component",
-		Long: `patch records a pedigree patch entry on the component matching <ref>.
-<diff-path> is the relative path to the on-disk diff file — bomtique stores
-the reference and does not read the file (scan reads it later).
+		Long: `patch records a pedigree.patches[] entry (spec §9.2) on the component
+matching <ref> (pkg:<type>/<name>[@<version>] or <name>@<version>).
 
---type is required and must be one of: unofficial, monkey, backport,
-cherry-pick (spec §7.4).
+<diff-path> is stored as-is and interpreted relative to the components
+manifest the entry lands in. bomtique does NOT read, copy, or hash the
+diff here — scan reads it later via safefs. Absolute paths and '..'
+traversal are rejected per spec §4.3.
 
---resolves is a repeatable flag taking comma-separated key=value pairs.
-Recognised keys: type (security|defect|enhancement), name, id, url,
-description. At least one of name= or id= must be supplied per entry.
+--type is required: one of unofficial, monkey, backport, cherry-pick.
 
-  --resolves "type=security,name=CVE-2024-1,url=https://example.com"
-  --resolves "name=BUG-42,type=defect"
+--resolves is a repeatable flag; each value is a comma-separated set of
+key=value pairs. Recognised keys:
+  type         security | defect | enhancement
+  name         free-form identifier (e.g. CVE-2024-1, BUG-42)
+  id           tracker id
+  url          reference URL
+  description  free-form prose
+At least one of name= or id= MUST be supplied per entry.
 
---notes appends to pedigree.notes with a blank line separator; pair with
---replace-notes to overwrite existing notes.`,
+--notes appends to pedigree.notes with a blank-line separator. Pair with
+--replace-notes to overwrite existing notes instead.
+
+Existing pedigree.patches[] entries on the target component are preserved;
+this command only appends. To drop them, run 'manifest update <ref>
+--clear-pedigree-patches' first.
+
+Multi-file match is a hard error; disambiguate with --into <path>.
+
+On success prints (to stdout):
+  registered <type> patch on <component> (<ref> → <path>)
+    N resolves entries                 when --resolves was supplied
+    pedigree.notes {appended|replaced} when --notes fired
+'registered' reads 'would register' under --dry-run.
+
+Examples:
+  # security backport with a CVE reference
+  bomtique manifest patch pkg:generic/libx@1.0 ./patches/fix-cve.patch \
+    --type backport \
+    --resolves "type=security,name=CVE-2024-1,url=https://example/cve/2024-1" \
+    --notes "Backported from upstream main @ abc1234"
+
+  # cherry-pick referencing two issues
+  bomtique manifest patch libx@1.0 ./patches/cherry.patch \
+    --type cherry-pick \
+    --resolves "type=defect,name=BUG-42" \
+    --resolves "type=enhancement,name=FEAT-7"
+
+  # replace rather than append to notes
+  bomtique manifest patch pkg:generic/libx@1.0 ./patches/local.patch \
+    --type unofficial --replace-notes --notes "Local-only fix; do not upstream"`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runManifestPatch(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, args[0], args[1])
@@ -55,10 +89,13 @@ description. At least one of name= or id= must be supplied per entry.
 	cmd.Flags().StringVarP(&f.Dir, "chdir", "C", "", "run in this directory (default: CWD)")
 	cmd.Flags().StringVar(&f.Into, "into", "", "force the target components manifest path")
 	cmd.Flags().BoolVar(&f.DryRun, "dry-run", false, "report changes without writing")
-	cmd.Flags().StringVar(&f.Type, "type", "", "patch type: unofficial|monkey|backport|cherry-pick (required)")
-	cmd.Flags().StringArrayVar(&f.Resolves, "resolves", nil, "resolves entry as key=val,key=val (repeatable)")
-	cmd.Flags().StringVar(&f.Notes, "notes", "", "append to pedigree.notes")
-	cmd.Flags().BoolVar(&f.ReplaceNotes, "replace-notes", false, "replace rather than append to pedigree.notes")
+	cmd.Flags().StringVar(&f.Type, "type", "",
+		"patch type: unofficial|monkey|backport|cherry-pick (required)")
+	cmd.Flags().StringArrayVar(&f.Resolves, "resolves", nil,
+		"resolves entry as key=val,...; keys: type (security|defect|enhancement), "+
+			"name, id, url, description; one of name= or id= is required (repeatable)")
+	cmd.Flags().StringVar(&f.Notes, "notes", "", "append to pedigree.notes (blank-line separator)")
+	cmd.Flags().BoolVar(&f.ReplaceNotes, "replace-notes", false, "with --notes, replace pedigree.notes instead of appending")
 
 	if err := cmd.MarkFlagRequired("type"); err != nil {
 		panic(err)

@@ -18,9 +18,32 @@ func newValidateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate [paths...]",
 		Short: "Validate Component Manifest v1 inputs without emitting an SBOM",
-		Long: `validate parses every input manifest and applies the §13.1 structural and
-§13.2 semantic rules (including filesystem checks for hash file/path targets).
-Exit code 0 on success, 1 on any validation error, 2 on usage error.`,
+		Long: `validate parses every input manifest and applies the full structural and
+semantic rule set scan runs, without emitting any SBOM. It checks:
+
+  * schema markers, required fields, and enum values (spec §13.1);
+  * identity rules across the pool — §11 collisions are hard failures;
+  * filesystem reachability for 'hashes[].file' / '.path' targets and for
+    license-text 'file' attachments (capped by --max-file-size);
+  * purl canonical form and SPDX license expression syntax.
+
+Hashes are NOT recomputed here (that is a scan-time concern), but missing
+or path-escaping targets are flagged.
+
+On success prints one stderr line: 'ok: N manifest(s) validated (P primary,
+C components)'.
+
+Exit codes: see 'bomtique --help'. In particular:
+  0  all manifests valid
+  1  one or more manifests failed structural or semantic checks
+  2  usage error (unknown flag, bad path)
+  3  I/O error reading a manifest
+  4  --warnings-as-errors triggered at least one warning
+
+Examples:
+  bomtique validate
+  bomtique validate ./team-a ./team-b
+  bomtique validate --warnings-as-errors .primary.json .components.json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runValidate(cmd.ErrOrStderr(), f, args)
 		},

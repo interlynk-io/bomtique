@@ -26,16 +26,32 @@ func newManifestRemoveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove <ref>",
 		Short: "Remove a component from a components manifest or scrub a ref from the primary's depends-on",
-		Long: `remove takes a single reference — a pkg: purl or a name@version string —
-and deletes the matching component from the reachable components pool. Any
-depends-on edge that pointed at the removed component is scrubbed from
-every other pool component and from the primary's depends-on, with one
-stderr line per scrubbed edge.
+		Long: `remove takes a single reference — pkg:<type>/<name>[@<version>] or
+<name>@<version> — and deletes the matching component from the reachable
+components pool. Every depends-on edge that pointed at the removed entry
+is scrubbed from every other pool component and from the primary's
+depends-on list; each scrubbed edge is logged on stderr.
 
-Use --primary to scrub only the primary manifest's depends-on, leaving the
-pool untouched.
+Use --primary to scrub only the primary's depends-on, leaving the pool
+untouched.
 
---dry-run reports the planned mutation without writing.`,
+Multi-file match (same ref in several components manifests) is a hard
+error; disambiguate with --into <path>.
+
+--dry-run reports the planned mutation without writing.
+
+On success prints (to stdout):
+  removed <name> from <path>                   pool delete
+  removed depends-on entry from <primary>      primary scrub
+  also scrubbed depends-on entry in <primary>  pool delete that also touched primary
+  also scrubbed <ref> from <path> (<identity>) per-edge line for each scrubbed edge
+'removed' reads 'would remove' under --dry-run.
+
+Examples:
+  bomtique manifest remove pkg:generic/acme/libx@1.0
+  bomtique manifest remove libx@1.0                    # name@version form
+  bomtique manifest remove --primary pkg:generic/x@1   # scrub primary only
+  bomtique manifest remove --dry-run pkg:npm/foo@1     # preview, no write`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runManifestRemove(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, args[0])

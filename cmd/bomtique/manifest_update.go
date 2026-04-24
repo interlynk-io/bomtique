@@ -60,17 +60,47 @@ func newManifestUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <ref>",
 		Short: "Update an existing component's metadata",
-		Long: `update locates the component matching <ref> (a pkg: purl or name@version)
-and applies the supplied field changes. Unset flags preserve the existing
-values. pedigree.patches survives by default; pass --clear-pedigree-patches
-to drop it.
+		Long: `update locates the component matching <ref> (pkg:<type>/<name>[@<version>]
+or <name>@<version>) and applies the supplied changes in place.
 
---to <version> bumps the component's version. If the current purl carries
-a version segment equal to the old version, the purl's version is bumped
-in lockstep; otherwise the purl is left alone with a stderr note.
+Change model:
+  * Unset value flags preserve existing values — no field is touched unless
+    a flag is passed for it.
+  * --clear-<field> null-outs the named optional field. This is separate
+    from the value flags so an empty string can never mean "clear".
+  * --to <version> bumps the component's version. If the current purl
+    carries a version segment equal to the old version, the purl is bumped
+    in lockstep; otherwise the purl is left alone with a stderr note.
+  * --online re-runs the registry importer for the target's purl and
+    layers flag values on top (same precedence as 'add'). --offline skips
+    the fetch. Importer list: see 'bomtique manifest --help'.
+  * pedigree.patches[] survives by default so 'patch' entries are not lost
+    across unrelated updates; pass --clear-pedigree-patches to drop it.
+  * Identity collisions against existing pool entries (§11) are rejected.
 
---clear-<field> null-outs the named optional field. This is separate from
-the value flags so an empty string can never mean "clear this field".`,
+Multi-file match (same ref in several components manifests) is a hard
+error; disambiguate with --into <path>.
+
+On success prints (to stdout):
+  updated <new-ref> in <path> (fields: a,b,c)
+  (or 'would update …' under --dry-run)
+  purl bumped in lockstep: <new-ref>          when --to updated the purl
+
+Examples:
+  # plain field replace
+  bomtique manifest update pkg:generic/libx@1.0 --license Apache-2.0
+
+  # version + purl lockstep bump
+  bomtique manifest update pkg:generic/libx@1.0 --to 2.0
+
+  # null out a field without setting it to ""
+  bomtique manifest update pkg:generic/libx@1.0 --clear-license
+
+  # refresh metadata from the importer, keep local overrides
+  bomtique manifest update pkg:npm/express@4.18.2 --online
+
+  # dry-run preview
+  bomtique manifest update libx@1.0 --license MIT --dry-run`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runManifestUpdate(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, args[0])
@@ -81,18 +111,23 @@ the value flags so an empty string can never mean "clear this field".`,
 	cmd.Flags().StringVar(&f.Into, "into", "", "force the update to this components manifest path")
 	cmd.Flags().BoolVar(&f.DryRun, "dry-run", false, "report changes without writing")
 	cmd.Flags().StringVar(&f.ToVer, "to", "", "bump version (and purl version segment when they match)")
-	cmd.Flags().StringArrayVar(&f.ExtList, "external", nil, "external reference as type=url (repeatable)")
-	cmd.Flags().BoolVar(&f.Offline, "offline", false, "skip registry metadata refresh")
-	cmd.Flags().BoolVar(&f.Online, "online", false, "require a registered importer to refresh the target's metadata")
+	cmd.Flags().StringArrayVar(&f.ExtList, "external", nil,
+		"replace external_references; each value type=url (repeatable); "+
+			"type is one of website|vcs|documentation|issue-tracker|distribution|"+
+			"support|release-notes|advisories|other")
+	cmd.Flags().BoolVar(&f.Offline, "offline", false, "skip registry metadata refresh (no network)")
+	cmd.Flags().BoolVar(&f.Online, "online", false, "require a registered importer to refresh the target's metadata; fail if none matches")
 
 	cmd.Flags().StringVar(&f.Name, "name", "", "rename component")
 	cmd.Flags().StringVar(&f.Version, "version", "", "replace version (use --to for lockstep purl bump)")
-	cmd.Flags().StringVar(&f.Type, "type", "", "replace type")
+	cmd.Flags().StringVar(&f.Type, "type", "",
+		"replace type: library|application|framework|container|operating-system|"+
+			"device|firmware|file|platform|device-driver|machine-learning-model|data")
 	cmd.Flags().StringVar(&f.Description, "description", "", "replace description")
-	cmd.Flags().StringVar(&f.License, "license", "", "replace license expression")
+	cmd.Flags().StringVar(&f.License, "license", "", "replace SPDX license expression")
 	cmd.Flags().StringVar(&f.Purl, "purl", "", "replace purl")
-	cmd.Flags().StringVar(&f.CPE, "cpe", "", "replace CPE")
-	cmd.Flags().StringVar(&f.Scope, "scope", "", "replace scope")
+	cmd.Flags().StringVar(&f.CPE, "cpe", "", "replace CPE 2.3 identifier")
+	cmd.Flags().StringVar(&f.Scope, "scope", "", "replace scope: required|optional|excluded")
 
 	cmd.Flags().StringVar(&f.Supplier, "supplier", "", "replace supplier name")
 	cmd.Flags().StringVar(&f.SupplierEmail, "supplier-email", "", "replace supplier email")
@@ -103,7 +138,8 @@ the value flags so an empty string can never mean "clear this field".`,
 	cmd.Flags().StringVar(&f.Distribution, "distribution", "", "replace distribution external reference")
 	cmd.Flags().StringVar(&f.IssueTracker, "issue-tracker", "", "replace issue-tracker external reference")
 
-	cmd.Flags().StringArrayVar(&f.DependsOn, "depends-on", nil, "replace depends-on (repeatable)")
+	cmd.Flags().StringArrayVar(&f.DependsOn, "depends-on", nil,
+		"replace depends-on; each value pkg:<type>/<name>[@<ver>] or <name>@<ver> (repeatable)")
 	cmd.Flags().StringArrayVar(&f.Tags, "tag", nil, "replace tags (repeatable)")
 
 	cmd.Flags().BoolVar(&f.ClearLicense, "clear-license", false, "null out license")
