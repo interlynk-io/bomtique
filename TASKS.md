@@ -825,17 +825,53 @@ milestone.
 
 ### M14.9 — GitLab importer
 
-- [ ] Recognises `https://gitlab.com/<group>/.../<repo>[/-/tree/<ref>]`
-      and `pkg:gitlab/<namespace>/<project>[@<ref>]`.
-- [ ] GitLab API v4: `GET /api/v4/projects/<url-encoded-path>` for
-      metadata; `/repository/tags/<ref>` for version confirmation.
-- [ ] Self-hosted support: `--gitlab-base-url <host>` flag AND
-      `BOMTIQUE_GITLAB_BASE_URL` env var override the host.
-- [ ] Extracted fields mirror GitHub; purl type `pkg:gitlab/...`.
-- [ ] `GITLAB_TOKEN` env var → `PRIVATE-TOKEN` header when set.
-      Never logged.
-- [ ] Tests via httptest: happy path; self-hosted URL; 404;
-      rate-limit; token scrubbing.
+- [x] Recognises:
+      - `https://gitlab.com/<group>[/<subgroup>...]/<project>[.git]`
+      - `https://gitlab.com/.../-/tree/<ref>`,
+        `/-/tags/<ref>`, `/-/commits/<ref>`
+      - `pkg:gitlab/<group>[/<subgroup>...]/<project>[@<ref>]`
+      Nested namespaces (multi-segment groups) supported natively —
+      path is URL-encoded via `url.QueryEscape` before the API call.
+- [x] `GET /api/v4/projects/<url-encoded-path>` for metadata;
+      `/repository/tags/<ref>` for tag existence check. Absent ref
+      falls back to default branch with a `diag.Warn` pin suggestion.
+- [x] Self-hosted: `BaseURL` field + `BOMTIQUE_GITLAB_BASE_URL` env
+      var (the `--gitlab-base-url` cobra flag is deferred; no
+      user-facing importer-specific flag surface yet).
+- [x] Extracted fields: `name`, `version`, `description`,
+      `purl = pkg:gitlab/<path>@<ref>`, `external_references` with
+      vcs (`web_url`), issue-tracker (`web_url` + "/-/issues"),
+      distribution (`http_url_to_repo`), and `website`
+      (`homepage` when it differs from `web_url`). License mapped
+      from `license.key` (lowercase) to SPDX via a hand-curated
+      table (Apache-2.0, MIT, BSD-*, GPL-*, LGPL-*, MPL-2.0,
+      AGPL-3.0-only, Unlicense, CC0-1.0, ISC, EPL-2.0, WTFPL,
+      0BSD). Unknown keys drop the license field with a stderr
+      warning telling the user to pass `--license` explicitly.
+- [x] `GITLAB_TOKEN` env var → `PRIVATE-TOKEN` header when set.
+      Never surfaces in error strings; scrub asserted via
+      dedicated test.
+- [x] 404 → `ErrNotFound` with typo hint.
+- [x] 403 + `RateLimit-Remaining: 0` → `ErrRateLimited`
+      mentioning `GITLAB_TOKEN`.
+- [x] 429 Too Many Requests → `ErrRateLimited` (GitLab surfaces
+      throttling with 429 rather than 403 on the public host).
+- [x] `init()` registers on the process-global registry so
+      `mutate.Add` auto-fetches on pkg:gitlab refs.
+- [x] 15 httptest-backed tests: Matches matrix, URL + purl parse
+      (incl. nested namespaces and single-segment rejection),
+      happy purl + URL paths, nested-namespace URL-encoding
+      assertion via `r.RequestURI`, 404, rate-limit (403 + 429),
+      license `null` dropped, unknown license key dropped with
+      warning, default-branch fallback with warning, tag-not-found,
+      PRIVATE-TOKEN header injection, token scrubbing,
+      `BOMTIQUE_GITLAB_BASE_URL` override, global registration,
+      `mapGitLabLicenseKey` table. Full
+      `go test ./...` + `go test -race` + `golangci-lint run` green.
+- [x] Live smoke against gitlab.com verified with
+      `pkg:gitlab/gitlab-org/cli@v1.47.0` — name, version,
+      description, purl, and all three external_references
+      resolved correctly.
 
 ### M14.10 — npm importer
 
