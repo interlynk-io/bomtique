@@ -1,0 +1,86 @@
+# SPDX-FileCopyrightText: 2026 Interlynk.io
+# SPDX-License-Identifier: Apache-2.0
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: go mod download
+        run: go mod download
+      - name: go vet
+        run: go vet ./...
+      - name: gofmt check
+        shell: bash
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-clean:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: go build
+        run: go build ./...
+      - name: go test
+        run: go test -count=1 ./...
+      - name: go test -race
+        if: matrix.os != 'windows-latest'
+        run: go test -count=1 -race ./...
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: coverage
+        run: go test -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+      - name: upload coverage
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 14
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: "2026.1"
+          install-go: false
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.11.4

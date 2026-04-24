@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Interlynk.io
+// SPDX-License-Identifier: Apache-2.0
+
 // Package purl implements Package-URL (PURL) parsing, construction, and
 // canonical comparison following the PURL specification at
 // https://github.com/package-url/purl-spec.

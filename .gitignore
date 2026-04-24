@@ -1,6 +1,7 @@
 # Go build artifacts
-/bomtique
+/bin/
 /dist/
+coverage.out
 
 # Local purl-spec test suite — cloned by developers, not tracked.
 # See internal/purl/purl_spec_test.go for setup instructions.
