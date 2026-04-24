@@ -875,26 +875,53 @@ milestone.
 
 ### M14.10 — npm importer
 
-- [ ] Recognises:
-      - `https://www.npmjs.com/package/<name>`
+- [x] Recognises every input shape the spec lists:
+      - `https://www.npmjs.com/package/<name>[.git]`
       - `https://www.npmjs.com/package/<name>/v/<version>`
-      - `npm:<name>[@<version>]`
-      - `pkg:npm/<name>[@<version>]`
-      - Scoped names `@scope/name` handled in URL escaping AND purl
-        namespace.
-- [ ] `GET https://registry.npmjs.org/<encoded-name>` for metadata; no
-      version specified → `dist-tags.latest`.
-- [ ] Extracted fields: `name`, `version`, `license` (SPDX string from
-      `license`), `description`, `purl`, `supplier` from `author`
-      object (`{ name, email, url }`), `external_references` from
-      `homepage`, `repository.url`, `bugs.url`.
-- [ ] Integrity: when `dist.integrity` present (SRI format
-      `sha512-<base64>`), decode to bytes and emit a literal-form hash
-      entry `{ algorithm: "SHA-512", value: <lowercase-hex> }` per
-      §8.1.
-- [ ] Tests via httptest: unscoped; scoped; no-version → latest;
-      integrity-hash decode; 404; non-SPDX license string falls through
-      with warning.
+      - `npm:<name>[@<version>]` (leading `@` scope treated as part
+        of name, not version separator)
+      - `pkg:npm/<name>[@<version>]` with scoped namespace mapping
+      - Scoped names `@scope/name` URL-encoded as `@scope%2Fname`.
+- [x] Two-endpoint split to stay under the 1 MiB cap:
+      - Version pinned → `GET /<encoded-name>/<version>` (per-version
+        doc, small response, works for packages like `@types/node`).
+      - Version unset → `GET /<encoded-name>` with
+        `Accept: application/vnd.npm.install-v1+json` (abbreviated
+        metadata) → read `dist-tags.latest` → pluck the version
+        entry.
+- [x] Extracted fields: `name`, `version`, `license` (plain SPDX
+      expression or deprecated `{ type, url }` object form best-
+      effort), `description`, `purl`, `supplier` from `author`
+      (object OR `"Name <email> (url)"` string form),
+      `external_references` (website=homepage, vcs=repository URL
+      with `git+` / `.git` sugar stripped, issue-tracker=bugs URL).
+- [x] Integrity: `dist.integrity` SRI decoded — picks the strongest
+      token when multiple present (SHA-512 > SHA-384 > SHA-256),
+      base64-decodes to hex, emits a literal-form §8.1 hash.
+      MD5/SHA-1 SRIs rejected.
+- [x] License guard: string values screened by
+      `isSPDXExpressionShape` (rejects "SEE LICENSE IN ...",
+      sentence-terminated strings, anything with non-SPDX
+      characters). Unknown shapes drop the license field with a
+      `diag.Warn` telling the user to pass `--license` explicitly.
+- [x] `BaseURL` field + `BOMTIQUE_NPM_BASE_URL` env-var override
+      for tests / mirrors.
+- [x] `init()` registers on the process-global registry so
+      `manifest add` auto-fetches on any npm ref shape.
+- [x] 17 httptest-backed tests: Matches matrix, URL + purl +
+      `npm:` parsing with scoped names, happy path (unscoped and
+      scoped), scoped URL-encoded assertion, latest fallback,
+      404, unpublished version, deprecated license object form,
+      non-SPDX license warning, author string + object forms,
+      repository string form with git+ / .git strip, SRI decode
+      against a real SHA-512 sum, strongest-token selection,
+      md5 rejection, env-var base URL, global registration.
+- [x] Live smoke against registry.npmjs.org verified with
+      `pkg:npm/express@4.18.2` (full fields + SHA-512 integrity)
+      AND `pkg:npm/%40types/node@20.10.0` (scoped — proves the
+      1 MiB cap no longer blocks high-version-count packages).
+      `go test ./...` + `-race` + `golangci-lint run ./...` all
+      clean.
 
 ### M14.11 — PyPI importer
 
