@@ -1,0 +1,15 @@
+# First pool add creates .components.json alongside the primary.
+# Offline so the global registry doesn't try to fetch pkg:generic.
+manifest
+add
+--offline
+--name
+libx
+--version
+1.0
+--license
+MIT
+--purl
+pkg:generic/acme/libx@1.0
+--website
+https://example.com/libx

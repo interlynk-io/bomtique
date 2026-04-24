@@ -1,8 +1,11 @@
 # Usage
 
 `bomtique` reads Component Manifest v1 files and emits one SBOM per
-primary manifest. Three subcommands cover the surface: `scan`,
-`validate`, `manifest schema`.
+primary manifest. Three commands ship today:
+
+- `scan` / `validate` — consume existing manifests, read-only.
+- `manifest {schema,init,add,remove,update,patch}` — scaffold and
+  edit the manifest files.
 
 ## `bomtique scan [paths...]`
 
@@ -83,8 +86,190 @@ being authored.
 bomtique manifest schema | jq .
 ```
 
+## `bomtique manifest init`
+
+Scaffolds a fresh `.primary.json` in the current directory. Refuses
+to overwrite an existing file without `--force`. Does NOT create a
+`.components.json` (§5.2 forbids an empty `components[]`; the first
+`manifest add` creates it on demand).
+
+```
+bomtique manifest init \
+  --name acme-app --version 1.0.0 \
+  --license Apache-2.0 \
+  --purl pkg:github/acme/app@1.0.0 \
+  --supplier "Acme Corp" --website https://acme.example
+```
+
+Flags: `--name` (required), `--version`, `--type` (default
+`application`), `--license`, `--purl`, `--cpe`, `--description`,
+`--supplier`/`--supplier-email`/`--supplier-url`,
+`--website`/`--vcs`/`--distribution`/`--issue-tracker`,
+`-C`/`--chdir <dir>`, `--force`.
+
+`--force` preserves unknown top-level keys and unknown fields on the
+primary component across re-init.
+
+## `bomtique manifest add`
+
+Adds a component to the pool (default) or appends a ref to the
+primary's `depends-on` list (`--primary`). The target components
+manifest is auto-located (nearest `.components.json` walking up from
+CWD; else created alongside the primary). Override with
+`--into <path>`.
+
+```
+# Flag-driven
+bomtique manifest add \
+  --name libx --version 1.0 --license MIT \
+  --purl pkg:generic/acme/libx@1.0
+
+# Read a Component from a JSON file
+bomtique manifest add --from ./incoming/libx.json
+
+# Read from stdin (tee from another tool)
+cat libx.json | bomtique manifest add --from -
+
+# Auto-fetch from a registry (default when --purl matches an
+# importer) — works for pkg:github, pkg:gitlab, pkg:npm, pkg:pypi,
+# pkg:cargo. Name and version still come from the flags.
+bomtique manifest add --online \
+  --purl pkg:npm/express@4.18.2 \
+  --name express --version 4.18.2
+
+# Record a repo-local vendored component (§9.3) with a directory
+# hash directive (digest computed at scan time) and an upstream
+# ancestor.
+bomtique manifest add \
+  --name vendor-libx --version 2.4.0 \
+  --vendored-at ./src/vendor-libx --ext c,h \
+  --upstream-name libx --upstream-version 2.4.0 \
+  --upstream-purl pkg:github/upstream-org/libx@2.4.0 \
+  --upstream-supplier "Upstream Inc"
+
+# Append to the primary's depends-on instead of the pool
+bomtique manifest add --primary \
+  --name libx --version 1.0 --purl pkg:generic/acme/libx@1.0
+```
+
+Component-field flags mirror `init`. Pool-only flags:
+`--scope required|optional|excluded`, repeatable `--depends-on <ref>`
+and `--tag <t>`, and repeatable `--external type=url` for arbitrary
+external references.
+
+Identity collisions against the existing pool (§11) are rejected
+hard.
+
+CSV target files reject components that can't be represented in CSV
+(external references, structured license texts, directory-form
+hashes, pedigree, lifecycles). The error message tells you to rerun
+with `--into <json-path>`.
+
+### Registry importers
+
+`--online` requires a registered importer to match the ref and
+errors when none does. Default mode auto-fetches when an importer
+matches and falls back to a skeleton otherwise. `--offline` skips
+the fetch entirely.
+
+| Ref shape | Importer | Auth env var | Fields lifted |
+|-----------|----------|--------------|---------------|
+| `https://github.com/o/r[/tree\|releases/tag/ref]`, `pkg:github/o/r[@ref]` | GitHub | `GITHUB_TOKEN` | name, version (ref or default branch), license (SPDX ID), description, homepage, html_url+issues |
+| `https://gitlab.com/.../proj[/-/tree\|tags/ref]`, `pkg:gitlab/.../proj[@ref]` | GitLab | `GITLAB_TOKEN` | name, version, license (mapped), description, web_url, repo URL, issues |
+| `https://www.npmjs.com/package/<name>[/v/<version>]`, `npm:<name>[@<ver>]`, `pkg:npm/<name>[@<ver>]` | npm | — | name, version, license (SPDX-shape check), description, author (supplier), repository, bugs, SHA-512 integrity |
+| `https://pypi.org/project/<name>[/<version>]`, `pypi:<name>[@<ver>]`, `pkg:pypi/<name>[@<ver>]` | PyPI | — | name (PEP 503), version, license (mapping + classifiers), summary, author, project_urls, sdist SHA-256 |
+| `https://crates.io/crates/<name>[/<version>]`, `pkg:cargo/<name>[@<ver>]` | crates.io | — | name, version, license (SPDX passthrough), description, homepage, repository, documentation, SHA-256 checksum |
+
+Non-defaults:
+
+- Self-hosted GitLab: `BOMTIQUE_GITLAB_BASE_URL=<host>` env var.
+- Mirror overrides (tests / air-gapped): `BOMTIQUE_GITHUB_BASE_URL`,
+  `BOMTIQUE_NPM_BASE_URL`, `BOMTIQUE_PYPI_BASE_URL`,
+  `BOMTIQUE_CARGO_BASE_URL`.
+- `--offline` is mutually exclusive with `--online`.
+
+Network policy: one HTTPS GET per importer call (two for GitHub
+tag-confirmation and for Cargo), 30 s total timeout, 1 MiB response
+cap enforced client-side via `io.LimitReader`, no retries. Tokens
+are sent once via the standard auth header and never appear in error
+output — a dedicated test pins that behaviour per importer.
+
+Flag values always override fields lifted from a `--from` file or an
+importer response. Each override emits one `warning:` line on
+stderr.
+
+## `bomtique manifest remove <ref>`
+
+Drops a component from the pool and scrubs any `depends-on` edges
+that pointed at it. The scrub runs across every reachable components
+manifest and the primary, with one stderr line per scrubbed edge.
+
+```
+bomtique manifest remove pkg:generic/acme/libx@1.0
+bomtique manifest remove libx@1.0               # name@version form
+bomtique manifest remove --primary pkg:generic/x@1   # scrub primary only
+bomtique manifest remove --dry-run pkg:npm/foo@1     # preview, no write
+```
+
+Multi-file match is a hard error (§11 invariant) — disambiguate with
+`--into <path>`.
+
+## `bomtique manifest update <ref>`
+
+Replaces fields on an existing pool component. Unset flags preserve
+current values; `--clear-<field>` explicitly nulls an optional
+field.
+
+```
+# Field replace
+bomtique manifest update pkg:generic/libx@1.0 --license Apache-2.0
+
+# Version bump with lockstep purl update
+bomtique manifest update pkg:generic/libx@1.0 --to 2.0
+
+# Null out a field without setting it to empty string
+bomtique manifest update pkg:generic/libx@1.0 --clear-license
+
+# Online refresh — re-fetch metadata from the importer and
+# re-apply flag overrides on top
+bomtique manifest update pkg:npm/express@4.18.2 --online
+```
+
+`--to <version>` also syncs the `purl` version segment when it
+matches the old version. `pedigree.patches[]` is preserved by
+default; pass `--clear-pedigree-patches` to drop it. `--dry-run`
+previews without writing.
+
+## `bomtique manifest patch <ref> <diff-path>`
+
+Registers a §9.2 pedigree patch entry on a component. bomtique does
+not read or copy the diff file — scan reads it later via safefs.
+
+```
+bomtique manifest patch pkg:generic/libx@1.0 ./patches/fix-cve.patch \
+  --type backport \
+  --resolves "type=security,name=CVE-2024-1,url=https://example/cve/2024-1" \
+  --resolves "type=defect,name=BUG-42" \
+  --notes "Backported from upstream to fix CVE-2024-1"
+```
+
+Types: `unofficial | monkey | backport | cherry-pick` (§7.4).
+`--resolves` takes repeatable `key=value,key=value` entries
+(`type=...`, `name=...`, `id=...`, `url=...`,
+`description=...`). Absolute paths and `..` traversal are rejected
+per §4.3. Use `--replace-notes` to overwrite rather than append to
+existing pedigree.notes.
+
 ## Environment variables
 
 - `SOURCE_DATE_EPOCH` — seconds since Unix epoch. Overridden by
   `--source-date-epoch` when both are set. Drives deterministic
   timestamps and serial numbers as described in §15.3.
+- `GITHUB_TOKEN` — optional `Authorization: Bearer` for the GitHub
+  importer; raises rate-limit caps.
+- `GITLAB_TOKEN` — optional `PRIVATE-TOKEN` for the GitLab
+  importer.
+- `BOMTIQUE_GITHUB_BASE_URL`, `BOMTIQUE_GITLAB_BASE_URL`,
+  `BOMTIQUE_NPM_BASE_URL`, `BOMTIQUE_PYPI_BASE_URL`,
+  `BOMTIQUE_CARGO_BASE_URL` — importer base URL overrides for
+  tests, mirrors, and self-hosted instances.

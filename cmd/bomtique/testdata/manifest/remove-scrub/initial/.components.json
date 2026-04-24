@@ -1,0 +1,18 @@
+{
+  "schema": "component-manifest/v1",
+  "components": [
+    {
+      "name": "referrer",
+      "version": "1.0",
+      "purl": "pkg:generic/acme/referrer@1.0",
+      "depends-on": [
+        "pkg:generic/acme/target@1.0"
+      ]
+    },
+    {
+      "name": "target",
+      "version": "1.0",
+      "purl": "pkg:generic/acme/target@1.0"
+    }
+  ]
+}

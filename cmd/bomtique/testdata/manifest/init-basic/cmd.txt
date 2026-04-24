@@ -1,0 +1,16 @@
+# Scaffold a fresh primary manifest. No initial/ — the fixture
+# tmpdir starts empty.
+manifest
+init
+--name
+acme-app
+--version
+1.0.0
+--license
+Apache-2.0
+--purl
+pkg:generic/acme/acme-app@1.0.0
+--supplier
+Acme Corp
+--website
+https://acme.example
