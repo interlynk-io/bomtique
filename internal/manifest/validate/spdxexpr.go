@@ -94,15 +94,15 @@ func tokenizeSPDXExpression(expr string) ([]spdxToken, error) {
 	i := 0
 	for i < len(expr) {
 		c := expr[i]
-		switch {
-		case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+		switch c {
+		case ' ', '\t', '\n', '\r':
 			i++
 			continue
-		case c == '(':
+		case '(':
 			out = append(out, spdxToken{kind: spdxLParen, raw: "(", pos: i})
 			i++
 			continue
-		case c == ')':
+		case ')':
 			out = append(out, spdxToken{kind: spdxRParen, raw: ")", pos: i})
 			i++
 			continue
