@@ -39,7 +39,6 @@ builds the shared pool, resolves each primary's reachable closure, and writes on
 SBOM per primary. Output filename is <name>-<version>.cdx.json (or <name>.cdx.json
 when the primary carries no version). Use --stdout to concatenate as newline-
 delimited JSON instead of writing files.`,
-		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGenerate(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, args)
 		},

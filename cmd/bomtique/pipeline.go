@@ -9,43 +9,84 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/interlynk-io/bomtique/internal/diag"
 	"github.com/interlynk-io/bomtique/internal/manifest"
 	"github.com/interlynk-io/bomtique/internal/pool"
 )
 
-// readManifests expands each argument (file path or glob) and parses
-// every resulting manifest via manifest.ParseFile. Directory arguments
-// are a future-M11 concern and return a diagnostic today.
+// readManifests expands each argument and parses every resulting
+// manifest via manifest.ParseFile. Arguments are resolved as:
 //
-// Files whose parse fails return a hard error so the caller can map to
-// exit codes; routing between validation errors and I/O errors is the
-// caller's job too.
+//   - Zero args → discover under `.` (CWD).
+//   - A directory → discover under it (see discover()).
+//   - A file → parse directly.
+//   - Anything else → try as a glob; error if nothing matches.
+//
+// Files without a schema marker are silently skipped per §12.5 —
+// regardless of whether they were found via discovery or supplied
+// explicitly. Any other parse error bubbles up so the CLI can map it
+// to an exit code.
 func readManifests(args []string) ([]*manifest.Manifest, error) {
+	paths, err := resolveArgs(args)
+	if err != nil {
+		return nil, err
+	}
 	var out []*manifest.Manifest
+	for _, path := range paths {
+		m, err := manifest.ParseFile(path)
+		if err != nil {
+			if errors.Is(err, manifest.ErrNoSchemaMarker) {
+				// §12.5: a file without a schema marker MUST be
+				// ignored silently.
+				continue
+			}
+			return nil, fmt.Errorf("parse %s: %w", path, err)
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}
+
+// resolveArgs turns the raw positional argument list into a flat list
+// of manifest-candidate file paths. Empty args triggers a CWD
+// discovery walk per M11; non-empty args expand each in turn via
+// expandArg.
+func resolveArgs(args []string) ([]string, error) {
+	if len(args) == 0 {
+		found, err := discover(".")
+		if err != nil {
+			return nil, fmt.Errorf("discover .: %w", err)
+		}
+		if len(found) == 0 {
+			diag.Warn("discovery: no manifest files found under CWD (looked for %s)",
+				discoveryFilenamesForMessage())
+		}
+		return found, nil
+	}
+	var paths []string
 	for _, arg := range args {
 		matches, err := expandArg(arg)
 		if err != nil {
 			return nil, err
 		}
-		for _, path := range matches {
-			m, err := manifest.ParseFile(path)
-			if err != nil {
-				return nil, fmt.Errorf("parse %s: %w", path, err)
-			}
-			out = append(out, m)
-		}
+		paths = append(paths, matches...)
 	}
-	return out, nil
+	return paths, nil
 }
 
 // expandArg resolves a single user-supplied argument into a list of
-// manifest file paths. Globs match; bare files pass through; directory
-// walking is reserved for M11 and returns an error today.
+// manifest file paths. Directory arguments trigger a discovery walk
+// under that directory (§12.5 non-normative). Globs match; bare files
+// pass through.
 func expandArg(arg string) ([]string, error) {
 	info, err := os.Stat(arg)
 	if err == nil {
 		if info.IsDir() {
-			return nil, fmt.Errorf("%s: directory argument — discovery lands in M11; pass file paths explicitly for now", arg)
+			found, derr := discover(arg)
+			if derr != nil {
+				return nil, fmt.Errorf("discover %s: %w", arg, derr)
+			}
+			return found, nil
 		}
 		return []string{arg}, nil
 	}
@@ -61,6 +102,14 @@ func expandArg(arg string) ([]string, error) {
 		return nil, fmt.Errorf("%s: no such file (and no glob matches)", arg)
 	}
 	return matches, nil
+}
+
+// discoveryFilenamesForMessage renders the discovery basenames in a
+// stable comma-separated form for diagnostics.
+func discoveryFilenamesForMessage() string {
+	// Two adjacent calls return the same string; the map has a fixed
+	// three-entry set whose order we pin manually for determinism.
+	return ".primary.json, .components.json, .components.csv"
 }
 
 // partitionedSet separates parsed manifests by kind. This is the

@@ -91,16 +91,28 @@ func TestValidate_MissingFileExitsIOError(t *testing.T) {
 	}
 }
 
-func TestValidate_MissingArgsIsUsageError(t *testing.T) {
-	_, _, err := withArgs(t, "validate")
-	if err == nil {
-		t.Fatal("expected error from missing args")
+func TestValidate_NoArgsTriggersDiscovery(t *testing.T) {
+	// M11: zero-arg `validate` walks the CWD for discoverable manifests.
+	// We stage a tiny tree, chdir into it, and check that discovery
+	// picks up both a primary and a components file — validation then
+	// runs cleanly.
+	dir := t.TempDir()
+	primary := `{"schema":"primary-manifest/v1","primary":{"name":"app","version":"1"}}`
+	if err := os.WriteFile(filepath.Join(dir, ".primary.json"), []byte(primary), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
 	}
-	// cobra signals usage errors as bare errors; our exit handler maps
-	// those to exitValidationError (1).  That's a known gap — we rely
-	// on cobra's own stderr "Error: requires at least 1 arg(s)".
-	if !strings.Contains(err.Error(), "arg") {
-		t.Fatalf("expected arg-count error, got %v", err)
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+
+	_, _, runErr := withArgs(t, "validate")
+	if got := exitCodeOf(runErr); got != exitOK {
+		t.Fatalf("exit code: got %d, want 0; err=%v", got, runErr)
 	}
 }
 

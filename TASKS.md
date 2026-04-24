@@ -372,13 +372,23 @@ section a task implements.
 
 ## M11 — Discovery (non-normative, documented)
 
-- [ ] `bomtique generate` without path arguments discovers manifests by
-      walking the CWD, globbing `**/.primary.json`, `**/.components.json`,
-      `**/.components.csv`. Skip `.git/`, `node_modules/`, `vendor/`,
-      `.venv/`, any dir starting with `.` by default.
-- [ ] Deterministic traversal order (sorted entries per directory).
-- [ ] Files without a schema marker are silently ignored [§12.5].
-- [ ] Document discovery semantics in `docs/discovery.md` per §12.5 SHOULD.
+- [x] `bomtique generate` / `validate` with no positional arguments
+      trigger a `discover(".")` walk; a directory argument walks that
+      directory. `filepath.WalkDir` matches basenames `.primary.json`,
+      `.components.json`, `.components.csv`. `.`-prefixed directories
+      and the hardcoded set (`.git`, `node_modules`, `vendor`, `.venv`)
+      are skipped with `fs.SkipDir`. Symbolic-link entries (file or
+      dir) are skipped — §18.2 defaults hold at the discovery layer
+      too.
+- [x] Deterministic traversal order via `filepath.WalkDir`'s sorted
+      `ReadDir` — two runs against the same tree yield the same path
+      sequence (tested).
+- [x] Files without a schema marker are silently skipped (§12.5) in
+      both discovery and explicit-path flows — `readManifests` catches
+      `manifest.ErrNoSchemaMarker` and continues.
+- [x] `docs/discovery.md` documents the conventional filenames, the
+      exclusion set, symlink handling, determinism, and the
+      silently-ignore rule per §12.5 SHOULD.
 
 ## M12 — Conformance test suite
 

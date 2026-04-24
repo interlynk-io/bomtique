@@ -21,7 +21,6 @@ func newValidateCmd() *cobra.Command {
 		Long: `validate parses every input manifest and applies the §13.1 structural and
 §13.2 semantic rules (including filesystem checks for hash file/path targets).
 Exit code 0 on success, 1 on any validation error, 2 on usage error.`,
-		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runValidate(cmd.ErrOrStderr(), f, args)
 		},
