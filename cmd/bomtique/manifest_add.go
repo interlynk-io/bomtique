@@ -14,6 +14,7 @@ import (
 
 	"github.com/interlynk-io/bomtique/internal/diag"
 	"github.com/interlynk-io/bomtique/internal/manifest/mutate"
+	"github.com/interlynk-io/bomtique/internal/regfetch"
 )
 
 type addFlags struct {
@@ -22,6 +23,8 @@ type addFlags struct {
 	Primary  bool
 	From     string
 	External []string
+	Offline  bool
+	Online   bool
 
 	Name          string
 	Version       string
@@ -77,6 +80,8 @@ error suggests rerunning with --into <json-path>.`,
 	cmd.Flags().BoolVar(&f.Primary, "primary", false, "append to the primary manifest's depends-on instead of a pool")
 	cmd.Flags().StringVar(&f.From, "from", "", "path to a Component JSON file, or - for stdin")
 	cmd.Flags().StringArrayVar(&f.External, "external", nil, "additional external reference as type=url (repeatable)")
+	cmd.Flags().BoolVar(&f.Offline, "offline", false, "skip all registry metadata fetches (no network)")
+	cmd.Flags().BoolVar(&f.Online, "online", false, "require a registered importer to match the ref (errors if none does)")
 
 	cmd.Flags().StringVar(&f.Name, "name", "", "component name")
 	cmd.Flags().StringVar(&f.Version, "version", "", "component version")
@@ -149,6 +154,9 @@ func runManifestAdd(stdout, stderr io.Writer, f *addFlags, stdin io.Reader) erro
 		UpstreamSupplier: f.UpstreamSupplier,
 		UpstreamWebsite:  f.UpstreamWebsite,
 		UpstreamVCS:      f.UpstreamVCS,
+
+		Offline: f.Offline,
+		Online:  f.Online,
 	}
 
 	// Wire the diag sink to our stderr so --from override notes and
@@ -212,6 +220,13 @@ func mapAddError(stderr io.Writer, err error) error {
 	}
 	if errors.Is(err, mutate.ErrInvalidRef) ||
 		errors.Is(err, mutate.ErrPrimaryNotFound) {
+		return newExitErr(exitValidationError, err)
+	}
+	if errors.Is(err, regfetch.ErrUnsupportedRef) ||
+		errors.Is(err, regfetch.ErrNetwork) ||
+		errors.Is(err, regfetch.ErrNotFound) ||
+		errors.Is(err, regfetch.ErrRateLimited) ||
+		errors.Is(err, regfetch.ErrResponseTooLarge) {
 		return newExitErr(exitValidationError, err)
 	}
 	if errors.Is(err, os.ErrNotExist) {
