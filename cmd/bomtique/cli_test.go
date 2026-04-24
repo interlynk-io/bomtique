@@ -149,15 +149,33 @@ func TestGenerate_ByteIdenticalWithSDE(t *testing.T) {
 	}
 }
 
-func TestGenerate_FormatSPDXIsNotImplemented(t *testing.T) {
+func TestGenerate_FormatSPDXWritesPerPrimary(t *testing.T) {
 	appendix := filepath.Join("..", "..", "internal", "manifest", "testdata", "appendix")
+	out := t.TempDir()
 	_, _, err := withArgs(t,
 		"generate",
 		filepath.Join(appendix, "b1.json"),
 		"--format", "spdx",
+		"--out", out,
+		"--source-date-epoch", "1700000000",
 	)
-	if got := exitCodeOf(err); got != exitUsageError {
-		t.Fatalf("exit code: got %d, want 2 (usage); err=%v", got, err)
+	if got := exitCodeOf(err); got != exitOK {
+		t.Fatalf("exit code: got %d, want 0; err=%v", got, err)
+	}
+	want := filepath.Join(out, "acme-server-1.0.0.spdx.json")
+	if _, err := os.Stat(want); err != nil {
+		t.Fatalf("expected output %s: %v", want, err)
+	}
+	// Sanity-check the SPDX document shape.
+	data, err := os.ReadFile(want)
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	if !strings.Contains(string(data), `"spdxVersion":"SPDX-2.3"`) {
+		t.Fatalf("output is not SPDX 2.3:\n%s", data)
+	}
+	if !strings.Contains(string(data), `"relationshipType":"DESCRIBES"`) {
+		t.Fatalf("output missing DESCRIBES relationship:\n%s", data)
 	}
 }
 

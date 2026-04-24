@@ -330,13 +330,45 @@ section a task implements.
 
 ## M10 — SPDX emitter (`internal/emit/spdx`)
 
-- [ ] SPDX 2.3 JSON output per §14.2 projection table.
-- [ ] DESCRIBES for primary; DEPENDS_ON between primary and reachable pool.
-- [ ] License texts merged into `licenseComments` with headings.
-- [ ] `externalRefs` mapping for purl/cpe/website/distribution/vcs/other.
-- [ ] Dropped-field warnings: one per field class (scope, variants,
-      descendants, lifecycles). Counter so we only warn once per class per run.
-- [ ] Post-emit JSON Schema validation (vendored SPDX 2.3 schema) under `--validate-output`.
+- [x] SPDX 2.3 JSON output in `internal/emit/spdx` — struct-per-field
+      document types so `json.Marshal` produces byte-stable ordering.
+- [x] DESCRIBES from `SPDXRef-DOCUMENT` to the primary's SPDXID;
+      DEPENDS_ON per resolved depends-on edge (§14.2 table). Unresolved
+      edges silently dropped — M6 already warned.
+- [x] License texts merged into `licenseComments` under `=== <id> ===`
+      heading blocks; inline text passed through, file-backed text read
+      via safefs under the `--max-file-size` cap.
+- [x] `externalRefs` mapping per §14.2:
+      - purl → PACKAGE-MANAGER/purl
+      - cpe → SECURITY/cpe23Type
+      - `external_references[type=vcs]` → OTHER/vcs
+      - any other type → OTHER/other with `comment: "original type: X"`
+      - `website` → `package.homepage` (not an externalRef)
+      - `distribution` → `package.downloadLocation` (not an externalRef)
+- [x] Dropped-field warnings emitted exactly once per class per run via
+      `droppedCounter`: scope, pedigree.variants, pedigree.descendants,
+      metadata.lifecycles. Warnings route through `internal/diag`.
+- [x] Supplier rendered as `Organization: <name>[ (<email>)]`; type
+      mapped to SPDX `primaryPackagePurpose` (library/application/
+      framework/container/operating-system/device/firmware/file
+      lossless; platform/device-driver/machine-learning-model/data →
+      OTHER per §14.2); hash algorithm names translated to SPDX form
+      (`SHA-256` → `SHA256`, `SHA-3-256` → `SHA3-256`, etc.). Pedigree
+      ancestors/commits rendered into `sourceInfo`; notes into
+      `package.comment`; patches into `package.annotations`.
+- [x] SPDXID derivation sanitises to the `[A-Za-z0-9.\-+]` charset the
+      SPDX spec allows, with collision-safe index suffixing.
+- [x] Determinism: when SOURCE_DATE_EPOCH is set the document
+      timestamp uses ISO 8601 UTC seconds and `documentNamespace` is
+      derived from a SHA-256-over-JCS-canonicalised primary-plus-pool
+      identifier seed → UUIDv5. Byte-identical SBOM output across two
+      runs verified in tests.
+- [x] `--format spdx` wired in `cmd/bomtique/generate.go`; per-primary
+      `<name>-<version>.spdx.json` filenames; tests cover the end-to-end
+      path (exit 0, file present, `spdxVersion`/`DESCRIBES` sanity).
+- [ ] Post-emit JSON Schema validation (vendored SPDX 2.3 schema) under
+      `--validate-output` — deferred with the CycloneDX schema validation
+      to a follow-up PR.
 
 ## M11 — Discovery (non-normative, documented)
 

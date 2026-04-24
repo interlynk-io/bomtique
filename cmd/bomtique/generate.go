@@ -14,6 +14,7 @@ import (
 
 	"github.com/interlynk-io/bomtique/internal/diag"
 	"github.com/interlynk-io/bomtique/internal/emit/cyclonedx"
+	"github.com/interlynk-io/bomtique/internal/emit/spdx"
 	"github.com/interlynk-io/bomtique/internal/graph"
 	"github.com/interlynk-io/bomtique/internal/manifest"
 	"github.com/interlynk-io/bomtique/internal/manifest/validate"
@@ -52,9 +53,7 @@ delimited JSON instead of writing files.`,
 
 func runGenerate(stdout, stderr io.Writer, f *generateFlags, args []string) error {
 	switch f.Format {
-	case "cyclonedx":
-	case "spdx":
-		return newExitErr(exitUsageError, fmt.Errorf("--format spdx is not yet implemented (TASKS.md M10)"))
+	case "cyclonedx", "spdx":
 	default:
 		return newExitErr(exitUsageError, fmt.Errorf("unknown --format %q (valid: cyclonedx, spdx)", f.Format))
 	}
@@ -121,8 +120,9 @@ func runGenerate(stdout, stderr io.Writer, f *generateFlags, args []string) erro
 	return nil
 }
 
-// emitOne runs pool distinctness + reachability + CycloneDX emission
-// for a single primary manifest and writes the result out.
+// emitOne runs pool distinctness + reachability + SBOM emission (in
+// the requested format) for a single primary manifest and writes the
+// result out.
 func emitOne(stdout, stderr io.Writer, f *generateFlags, pm *manifest.Manifest, p *pool.Pool, idx *graph.PoolIndex, prov provenanceIndex, multiPrimary bool) error {
 	primary := &pm.Primary.Primary
 
@@ -135,26 +135,15 @@ func emitOne(stdout, stderr io.Writer, f *generateFlags, pm *manifest.Manifest, 
 		return newExitErr(exitValidationError, fmt.Errorf("%s: %w", pm.Path, err))
 	}
 
-	reachable := make([]cyclonedx.ReachableComponent, 0, len(r.Components))
-	for _, poolIdx := range r.Components {
-		c := &p.Components[poolIdx]
-		reachable = append(reachable, cyclonedx.ReachableComponent{
-			Component:   c,
-			ManifestDir: prov.manifestDirFor(c),
-		})
-	}
+	primaryDir := filepath.Dir(pm.Path)
 
-	emitOpts := cyclonedx.Options{MaxFileSize: f.MaxFileSize}
-	if f.SourceDateEpochSet {
-		v := f.SourceDateEpoch
-		emitOpts.SourceDateEpoch = &v
+	var data []byte
+	switch f.Format {
+	case "cyclonedx":
+		data, err = emitCycloneDX(f, primary, primaryDir, p, r, prov)
+	case "spdx":
+		data, err = emitSPDX(f, primary, primaryDir, p, r, prov)
 	}
-
-	data, err := cyclonedx.Emit(cyclonedx.EmitInput{
-		Primary:    primary,
-		PrimaryDir: filepath.Dir(pm.Path),
-		Reachable:  reachable,
-	}, emitOpts)
 	if err != nil {
 		return newExitErr(exitValidationError, fmt.Errorf("%s: emit: %w", pm.Path, err))
 	}
@@ -170,7 +159,7 @@ func emitOne(stdout, stderr io.Writer, f *generateFlags, pm *manifest.Manifest, 
 		return nil
 	}
 
-	name := filenameFor(primary)
+	name := filenameFor(primary, f.Format)
 	out := filepath.Join(f.OutDir, name)
 	if err := os.WriteFile(out, data, 0o644); err != nil {
 		return newExitErr(exitIOError, fmt.Errorf("write %s: %w", out, err))
@@ -179,16 +168,62 @@ func emitOne(stdout, stderr io.Writer, f *generateFlags, pm *manifest.Manifest, 
 	return nil
 }
 
-// filenameFor produces "<name>-<version>.cdx.json" (or "<name>.cdx.json"
+func emitCycloneDX(f *generateFlags, primary *manifest.Component, primaryDir string, p *pool.Pool, r *graph.Reachability, prov provenanceIndex) ([]byte, error) {
+	reachable := make([]cyclonedx.ReachableComponent, 0, len(r.Components))
+	for _, poolIdx := range r.Components {
+		c := &p.Components[poolIdx]
+		reachable = append(reachable, cyclonedx.ReachableComponent{
+			Component:   c,
+			ManifestDir: prov.manifestDirFor(c),
+		})
+	}
+	opts := cyclonedx.Options{MaxFileSize: f.MaxFileSize}
+	if f.SourceDateEpochSet {
+		v := f.SourceDateEpoch
+		opts.SourceDateEpoch = &v
+	}
+	return cyclonedx.Emit(cyclonedx.EmitInput{
+		Primary:    primary,
+		PrimaryDir: primaryDir,
+		Reachable:  reachable,
+	}, opts)
+}
+
+func emitSPDX(f *generateFlags, primary *manifest.Component, primaryDir string, p *pool.Pool, r *graph.Reachability, prov provenanceIndex) ([]byte, error) {
+	reachable := make([]spdx.ReachableComponent, 0, len(r.Components))
+	for _, poolIdx := range r.Components {
+		c := &p.Components[poolIdx]
+		reachable = append(reachable, spdx.ReachableComponent{
+			Component:   c,
+			ManifestDir: prov.manifestDirFor(c),
+		})
+	}
+	opts := spdx.Options{MaxFileSize: f.MaxFileSize}
+	if f.SourceDateEpochSet {
+		v := f.SourceDateEpoch
+		opts.SourceDateEpoch = &v
+	}
+	return spdx.Emit(spdx.EmitInput{
+		Primary:    primary,
+		PrimaryDir: primaryDir,
+		Reachable:  reachable,
+	}, opts)
+}
+
+// filenameFor produces "<name>-<version>.<ext>" (or "<name>.<ext>"
 // when version is absent), sanitising characters that aren't safe in
-// filenames. The primary's name comes from a validated manifest so the
-// sanitisation is defensive rather than strictly necessary.
-func filenameFor(c *manifest.Component) string {
+// filenames. `format` picks the extension — `.cdx.json` for cyclonedx,
+// `.spdx.json` for spdx.
+func filenameFor(c *manifest.Component, format string) string {
+	ext := ".cdx.json"
+	if format == "spdx" {
+		ext = ".spdx.json"
+	}
 	name := sanitizeFilename(c.Name)
 	if c.Version != nil && strings.TrimSpace(*c.Version) != "" {
-		return name + "-" + sanitizeFilename(strings.TrimSpace(*c.Version)) + ".cdx.json"
+		return name + "-" + sanitizeFilename(strings.TrimSpace(*c.Version)) + ext
 	}
-	return name + ".cdx.json"
+	return name + ext
 }
 
 func sanitizeFilename(s string) string {
