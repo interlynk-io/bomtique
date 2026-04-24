@@ -176,19 +176,31 @@ section a task implements.
 
 ## M6 — Dependency resolution and reachability (`internal/graph`)
 
-- [ ] `depends-on` parsing [§10.2]: `pkg:` → canonical purl match; else
-      split on last `@` into `(name, version)`; reject whitespace-bearing or
-      unprefixed-without-`@` strings.
-- [ ] Candidate lookup against the deduped pool.
-- [ ] Transitive closure from a set of roots; warn on unresolved edges and
-      drop the edge (preserve the referring component) [§10.3].
-- [ ] Reachability rules [§10.4]:
-  - single-primary + empty depends-on → whole pool becomes direct deps.
-  - single-primary + non-empty → closure only; warn per unreachable.
-  - multi-primary → require non-empty depends-on on each; per-primary closure.
-  - orphan-across-all warning emitted once per run [§10.4 last bullet].
-- [ ] Cycle tolerance: cycles are legal in dependency graphs; closure uses a
-      visited set.
+- [x] `depends-on` parsing [§10.2] via `graph.ParseRef`: `pkg:` prefix →
+      canonical purl match (invalid purl is `ErrInvalidPurlReference`);
+      else last-`@` split handles scoped identifiers like
+      `@angular/core@1.0.0`; whitespace, empty, bare-name-without-`@`,
+      and trailing-`@` all return `ErrInvalidReference`.
+- [x] Pool lookup via `graph.PoolIndex`: `byPurl` (canonical) for `RefPurl`,
+      `byNameVersion` (byte-exact) for `RefNameVersion`. `Resolve(ref)`
+      returns `(idx, ok)`; misses drive §10.3 warnings and edge drops.
+- [x] Transitive closure via `graph.TransitiveClosure`: BFS with visited
+      set; unresolved intra-closure edges warn through `internal/diag` and
+      drop the edge while preserving the referring component (§10.3);
+      unresolved root edges returned separately so the caller can attribute
+      them to the primary.
+- [x] Reachability rules [§10.4] via `graph.PerPrimary` and
+      `graph.ForProcessingSet`:
+  - [x] single-primary + empty depends-on → whole pool is direct deps
+        (convenience rule).
+  - [x] single-primary + non-empty → closure only; per-primary
+        "not reachable" warning for every omitted pool component.
+  - [x] multi-primary → `ErrMultiPrimaryMissingDepsOn` on any empty
+        depends-on; otherwise per-primary closure + unreachable warnings.
+  - [x] orphan-across-all: one warning per pool component unreached from
+        every primary, emitted once per run, not per SBOM.
+- [x] Cycle tolerance: visited set on both root seeding and BFS queue so
+      A→B→A and self-edges terminate naturally.
 
 ## M7 — CycloneDX emitter (`internal/emit/cyclonedx`)
 
