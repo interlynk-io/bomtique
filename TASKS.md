@@ -976,18 +976,43 @@ milestone.
 
 ### M14.12 — Cargo importer
 
-- [ ] Recognises `https://crates.io/crates/<name>[/<version>]` and
-      `pkg:cargo/<name>[@<version>]`.
-- [ ] `GET https://crates.io/api/v1/crates/<name>` for crate
-      metadata; `/crates/<name>/<version>` for version-specific info.
-- [ ] Extracted fields: `name`, `version`, `license` (SPDX),
-      `description`, `purl`, `external_references` from `homepage`,
-      `repository`, `documentation`.
-- [ ] Per-version SHA-256 checksum → literal hash entry.
-- [ ] User-Agent MUST identify bomtique with a contact URL per
-      crates.io ToS; the default UA from M14.7 satisfies this —
-      verified by a test asserting the header shape.
-- [ ] Tests via httptest: happy path; version pinning; UA assertion.
+- [x] Recognises `https://crates.io/crates/<name>[/<version>]` and
+      `pkg:cargo/<name>[@<version>]` (plus `http://` counterparts).
+- [x] Two GETs: `/api/v1/crates/<name>` for crate-level metadata
+      (description, homepage, repository, documentation,
+      newest_version with max_version fallback) and
+      `/api/v1/crates/<name>/<version>` for per-version license and
+      SHA-256 checksum (crates.io stores licensing per version).
+- [x] Extracted fields: `name`, `version`, `license` (SPDX
+      expression — crates.io stores canonical SPDX, passed through
+      verbatim, e.g. `"MIT OR Apache-2.0"`), `description`,
+      `purl = pkg:cargo/<name>@<version>`, `external_references`
+      (website/vcs/documentation).
+- [x] Per-version SHA-256 checksum lowercased and emitted as a
+      literal-form §8.1 hash entry.
+- [x] Missing license → component emitted without license plus a
+      `diag.Warn`.
+- [x] User-Agent satisfies crates.io ToS (identifies bomtique +
+      contact URL). Asserted by a test pinning the shape of the UA
+      header the registry receives.
+- [x] 429 → `ErrRateLimited`. 404 on crate → `ErrNotFound`
+      ("crate %q"); 404 on version → `ErrNotFound` ("crate %q has
+      no published version %q").
+- [x] `BaseURL` field + `BOMTIQUE_CARGO_BASE_URL` env-var override
+      for tests / mirrors.
+- [x] `init()` registers on the process-global registry so
+      `manifest add` auto-fetches pkg:cargo refs.
+- [x] 12 httptest-backed tests: Matches matrix, URL + purl
+      parsing, happy pinned fetch with full-field extraction
+      (incl. lowercased checksum), latest fallback via
+      `newest_version`, `max_version` secondary fallback, 404 on
+      crate, 404 on version, UA ToS shape, 429 rate-limit, env-var
+      override, global registration, empty-license handling. Plus
+      live smoke against crates.io for `pkg:cargo/serde@1.0.193` —
+      name, version, description, `MIT OR Apache-2.0` license,
+      three external refs, and the real SHA-256 checksum all
+      resolve. Full `go test ./...` + `-race` +
+      `golangci-lint run ./...` clean.
 
 ### M14.13 — Docs, conformance, release
 
