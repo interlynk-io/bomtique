@@ -770,30 +770,58 @@ milestone.
 
 ### M14.8 — GitHub importer
 
-- [ ] Recognises:
-      - `https://github.com/<owner>/<repo>`
+- [x] Recognises:
+      - `https://github.com/<owner>/<repo>[.git]`
       - `https://github.com/<owner>/<repo>/tree/<ref>`
       - `https://github.com/<owner>/<repo>/releases/tag/<ref>`
+      - `https://github.com/<owner>/<repo>/commit[s]/<ref>`
+      - `http://` counterparts (normalised)
       - `pkg:github/<owner>/<repo>[@<ref>]`
-- [ ] `GET https://api.github.com/repos/<owner>/<repo>` for repo
-      metadata: name, description, homepage, `license.spdx_id`,
-      `html_url`.
-- [ ] When `<ref>` supplied: second `GET
-      .../releases/tags/<ref>` (else `.../git/ref/tags/<ref>`) to
-      confirm; absent ref falls back to default branch as `version`
-      with a stderr warning suggesting the user pin.
-- [ ] Extracted fields: `name` = repo name; `version` = ref;
-      `license` = SPDX ID; `description`; `purl` =
+      Nested `pkg:github` namespaces (§9.3 repo-local form) are
+      explicitly rejected with `ErrUnsupportedRef` — those purls
+      aren't importable from the real API.
+- [x] `GET https://api.github.com/repos/<owner>/<repo>` for repo
+      metadata: name, description, homepage, html_url,
+      default_branch, `license.spdx_id`.
+- [x] When `<ref>` is supplied: follow-up `GET
+      /repos/<owner>/<repo>/git/ref/tags/<ref>` confirms the tag
+      exists (404 → `ErrNotFound`). Absent ref falls back to the
+      repo's default branch with a `diag.Warn` suggesting the user
+      pin.
+- [x] Extracted fields: `name` = repo name; `version` = tag or
+      default branch; `license` = SPDX ID (NOASSERTION and null
+      are both dropped); `description`; `purl` =
       `pkg:github/<owner>/<repo>@<ref>`; `external_references` with
-      website / vcs / issue-tracker entries.
-- [ ] `GITHUB_TOKEN` env var, when set, used as
-      `Authorization: Bearer`. Never logged; verbose output scrubs it.
-- [ ] 404 → `ErrNotFound` with "did you typo owner/repo?" hint.
-- [ ] 403 with `X-RateLimit-Remaining: 0` → `ErrRateLimited`
+      website (homepage), vcs (html_url), issue-tracker
+      (html_url + "/issues").
+- [x] `GITHUB_TOKEN` env var, when set, applied as
+      `Authorization: Bearer`. Token never appears in any
+      user-facing error string (belt-and-braces tests assert the
+      negative).
+- [x] 404 → `ErrNotFound` with a "did you typo owner/repo?" hint.
+- [x] 403 with `X-RateLimit-Remaining: 0` → `ErrRateLimited`
       mentioning `GITHUB_TOKEN`.
-- [ ] Tests via `httptest.Server`: happy path, 404, rate-limit,
-      missing license (API returns `license: null`), default-branch
-      fallback, scrubbing of `GITHUB_TOKEN` from verbose output.
+- [x] `BaseURL` field + `BOMTIQUE_GITHUB_BASE_URL` env-var override
+      (tests inject `httptest.Server` URLs without touching global
+      state).
+- [x] `init()` registers a `GitHubImporter{}` on the process-global
+      registry so `mutate.Add` auto-fetches on pkg:github refs by
+      default.
+- [x] Tests via `httptest.Server`: URL + purl parsing, nested-purl
+      rejection, happy-path purl fetch, happy-path URL fetch, 404
+      repo, rate-limited, `license: null`, `NOASSERTION` skipped,
+      default-branch fallback with stderr warning, 404 on unknown
+      tag, Authorization header applied when `GITHUB_TOKEN` is
+      set, token scrubbed from 404 error, token scrubbed from
+      generic error (418), `BOMTIQUE_GITHUB_BASE_URL` override
+      respected, global registration reachable via `Default().Match`,
+      produced Component satisfies §6.1. Full
+      `go test ./...` + `go test -race ./...` +
+      `golangci-lint run ./...` green.
+- [x] Live smoke against api.github.com verified with
+      `pkg:github/google/uuid@v1.6.0` — name, version, license
+      `BSD-3-Clause`, description, and external_references all
+      resolved correctly.
 
 ### M14.9 — GitLab importer
 
