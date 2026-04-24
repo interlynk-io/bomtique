@@ -21,12 +21,17 @@ var discoveryFilenames = map[string]struct{}{
 
 // discoveryExcludedDirs are directories whose names we always skip
 // during a walk. These are the common high-volume build directories
-// where user manifests never live; matching our TASKS.md M11 scope.
+// where user manifests never live, plus `testdata` — which the Go
+// toolchain convention reserves for test fixtures that are
+// intentionally excluded from builds. A negative conformance fixture
+// (e.g. `primary-manifest/v2`) is legitimate test content that must
+// not poison a dev-loop `bomtique validate` run.
 var discoveryExcludedDirs = map[string]struct{}{
 	".git":         {},
 	"node_modules": {},
 	"vendor":       {},
 	".venv":        {},
+	"testdata":     {},
 }
 
 // discover walks `root` and returns every file whose basename matches

@@ -34,13 +34,15 @@ The walk refuses to descend into:
 
 - Any directory whose name starts with `.` (covers `.git`, `.venv`,
   `.vscode`, `.cache`, and so on).
-- Any directory named `node_modules`, `vendor`, or `.venv` (already
-  covered by the `.`-prefix rule but listed explicitly for the
-  non-dot vendored-dep convention).
+- Any directory named `node_modules`, `vendor`, `.venv`, or `testdata`.
+  `testdata/` follows the Go toolchain convention: it holds test
+  fixtures — often *deliberately* malformed ones — which must not
+  poison a legitimate `bomtique` invocation.
 
 This is deliberately conservative. You rarely want to mine manifests
-out of build caches, package-manager caches, or committed third-party
-source trees; when you do, pass the specific path.
+out of build caches, package-manager caches, committed third-party
+source trees, or test-fixture directories; when you do, pass the
+specific path.
 
 ## Symbolic links
 
