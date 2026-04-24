@@ -6,6 +6,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -15,7 +16,52 @@ import (
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "0.1.0-dev"
 
+// Exit codes defined by M9:
+//
+//	0 — success (no errors, no warnings-as-errors trigger)
+//	1 — validation / semantic error in a manifest
+//	2 — CLI usage error (wrong flags, missing args, etc.)
+//	3 — I/O error (read/write failure, missing file we needed)
+//	4 — --warnings-as-errors triggered at least one warning
+const (
+	exitOK              = 0
+	exitValidationError = 1
+	exitUsageError      = 2
+	exitIOError         = 3
+	exitWarningsError   = 4
+)
+
+// exitErr wraps an error with an explicit process exit code. Commands
+// return it when they want a specific code other than the default
+// error → 1 mapping cobra gives us.
+type exitErr struct {
+	code int
+	err  error
+}
+
+func (e *exitErr) Error() string { return e.err.Error() }
+func (e *exitErr) Unwrap() error { return e.err }
+
+func newExitErr(code int, err error) *exitErr {
+	if err == nil {
+		return nil
+	}
+	return &exitErr{code: code, err: err}
+}
+
 func main() {
+	root := newRootCmd()
+	if err := root.Execute(); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "error:", err)
+		var ee *exitErr
+		if errors.As(err, &ee) {
+			os.Exit(ee.code)
+		}
+		os.Exit(exitValidationError)
+	}
+}
+
+func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "bomtique",
 		Short:         "Hand-authored SBOM toolkit (Component Manifest v1 consumer)",
@@ -24,34 +70,10 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-
 	root.AddCommand(
 		newGenerateCmd(),
 		newValidateCmd(),
+		newManifestCmd(),
 	)
-
-	if err := root.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
-}
-
-func newGenerateCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "generate [paths...]",
-		Short: "Generate SBOMs from Component Manifest v1 inputs",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("generate: not yet implemented (TASKS.md milestone M9)")
-		},
-	}
-}
-
-func newValidateCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "validate [paths...]",
-		Short: "Validate Component Manifest v1 inputs without emitting an SBOM",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("validate: not yet implemented (TASKS.md milestone M9)")
-		},
-	}
+	return root
 }

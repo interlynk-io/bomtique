@@ -297,20 +297,36 @@ section a task implements.
 
 ## M9 — CLI surface (`cmd/bomtique`)
 
-- [ ] `bomtique generate [paths...]`: glob/dir arguments; writes one SBOM
-      per primary to `--out <dir>` (default `./sbom/`); filename is
-      `<primary-name>-<primary-version>.cdx.json` or
-      `<primary-name>.cdx.json` if no version; `--format cyclonedx|spdx`;
-      `--stdout` to concatenate as NDJSON for CI.
-- [ ] `bomtique validate [paths...]`: structural + semantic validation only;
-      exit code 0 (ok), 1 (validation error), 2 (usage).
-- [ ] `bomtique manifest schema`: prints the JSON Schema draft 2020-12 [§A].
-- [ ] Flags: `--max-file-size`, `--tag <t>` (per-build filter over pool tags [§6.2]),
-      `--warnings-as-errors`, `--source-date-epoch <n>` (overrides env),
-      `--follow-symlinks` (opt-in, documented as outside spec [§18.2]),
-      `--output-validate`.
-- [ ] Exit codes: 0 ok, 1 validation/semantic error, 2 usage, 3 I/O error,
-      4 warnings-as-errors triggered.
+- [x] `bomtique generate [paths...]`: accepts file paths and globs;
+      parses every input, partitions primary vs components, runs
+      validator, builds the pool (with `--tag` filter), does per-primary
+      reachability, and emits one `<name>-<version>.cdx.json` per
+      primary under `--out` (default `./sbom/`). `--stdout` emits NDJSON
+      (one compact JSON per line). `--format spdx` returns
+      ErrNotImplemented (M10); unknown formats are a usage error.
+      Directory-argument discovery is deferred to M11.
+- [x] `bomtique validate [paths...]`: structural + semantic via
+      `validate.ProcessingSet`; exit 0 on clean, 1 on any error,
+      3 on missing-file I/O errors, 2 on cobra usage errors.
+- [x] `bomtique manifest schema`: prints a draft-2020-12 placeholder
+      document with the two schema-marker constants wired into a
+      `oneOf`. Field-level detail is still TODO per spec Appendix A —
+      the Go validator is authoritative today.
+- [x] Flags:
+  - [x] `--max-file-size` (default `safefs.DefaultMaxFileSize` = 10 MiB),
+        threaded through `validate.Options` and `cyclonedx.Options`.
+  - [x] `--tag <t>` (repeatable) filters pool components whose `tags`
+        include any listed value; applied before reachability (§6.2).
+  - [x] `--warnings-as-errors` promotes any `diag.Warn` to exit 4.
+  - [x] `--source-date-epoch <n>` overrides the env var when set; both
+        routes feed `cyclonedx.Options.SourceDateEpoch`.
+  - [x] `--follow-symlinks` accepted; warns that safefs's opt-in path
+        isn't yet wired (symlinks still refused).
+  - [x] `--output-validate` accepted; warns that schema vendor is
+        deferred (no-op today).
+- [x] Exit codes: 0 ok, 1 validation/semantic error, 2 usage error,
+      3 I/O error, 4 warnings-as-errors triggered. Commands signal via
+      `*exitErr` wrapping; main unwraps to set `os.Exit`.
 
 ## M10 — SPDX emitter (`internal/emit/spdx`)
 
