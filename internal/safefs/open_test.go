@@ -153,7 +153,7 @@ func TestOpen_StreamingOversize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	// Drain in small chunks; the 101st byte should trigger ErrFileTooLarge.
 	buf := make([]byte, 32)
 	total := 0
@@ -186,7 +186,7 @@ func TestOpen_StreamingWithinCap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	got, err := io.ReadAll(rc)
 	if err != nil {
 		t.Fatalf("ReadAll: %v", err)
