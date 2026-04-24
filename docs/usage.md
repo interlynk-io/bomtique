@@ -20,12 +20,12 @@ bomtique generate "pkg-manifests/*.json"
 
 ### Flags
 
-- `--out <dir>` (default `./sbom`) — output directory. Per-primary
-  filenames: `<name>-<version>.cdx.json` for CycloneDX,
+- Default output: NDJSON on stdout (one compact JSON per primary).
+  Suitable for piping to another tool or redirecting with `>`.
+- `--out <dir>` — write per-primary files into `<dir>` instead.
+  Filenames: `<name>-<version>.cdx.json` for CycloneDX,
   `<name>-<version>.spdx.json` for SPDX; missing version drops the
   hyphen (`<name>.cdx.json`).
-- `--stdout` — write NDJSON (one compact JSON line per primary) to
-  stdout instead of files.
 - `--format cyclonedx|spdx` (default `cyclonedx`).
 - `--source-date-epoch <n>` — epoch seconds. When set, the output
   carries a deterministic ISO 8601 UTC-second `metadata.timestamp` (CDX)
