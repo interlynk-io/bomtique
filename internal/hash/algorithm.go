@@ -131,7 +131,7 @@ func ValidateLiteralValue(alg Algorithm, v string) error {
 	}
 	for i := 0; i < len(v); i++ {
 		c := v[i]
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return fmt.Errorf("%w: non-lowercase-hex byte %q at offset %d",
 				ErrInvalidLiteralValue, c, i)
 		}
