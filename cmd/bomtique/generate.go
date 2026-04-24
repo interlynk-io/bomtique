@@ -68,7 +68,7 @@ func runGenerate(stdout, stderr io.Writer, f *generateFlags, args []string) erro
 
 	diag.Reset()
 
-	manifests, err := readManifests(args)
+	manifests, err := readManifests(args, verboseWriter(stderr, f.Verbose))
 	if err != nil {
 		return newExitErr(exitIOError, err)
 	}

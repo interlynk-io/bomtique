@@ -21,6 +21,7 @@ type commonFlags struct {
 	MaxFileSize      int64
 	WarningsAsErrors bool
 	FollowSymlinks   bool // accepted but not yet wired — safefs always refuses symlinks today
+	Verbose          bool
 }
 
 func (f *commonFlags) attach(cmd *cobra.Command) {
@@ -30,6 +31,8 @@ func (f *commonFlags) attach(cmd *cobra.Command) {
 		"treat any warning emitted during the run as an error (exit code 4)")
 	cmd.Flags().BoolVar(&f.FollowSymlinks, "follow-symlinks", false,
 		"follow symlinks during filesystem reads (opt-in, outside spec §18.2)")
+	cmd.Flags().BoolVar(&f.Verbose, "verbose", false,
+		"log each manifest file as it's parsed, plus silently-skipped paths (§12.5)")
 }
 
 // emitFlags layers generate-only flags on top of commonFlags. These
