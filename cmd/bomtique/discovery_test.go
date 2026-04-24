@@ -73,6 +73,7 @@ func TestDiscover_SkipsExcludedDirs(t *testing.T) {
 		"vendor/.primary.json":       "x",
 		".venv/.primary.json":        "x",
 		".anything/.primary.json":    "x", // any .-prefixed dir
+		"testdata/.primary.json":     "x", // Go's test-fixture convention
 		"src/.primary.json":          "x", // KEEP
 	})
 	got, err := discover(root)
