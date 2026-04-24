@@ -23,9 +23,12 @@ import (
 	vendored "github.com/interlynk-io/bomtique/schemas"
 )
 
-// generateFlags layers output-specific flags on top of the common set.
+// generateFlags layers output-destination flags on top of the
+// emit-wide set (which already carries --tag, --source-date-epoch,
+// --output-validate, plus the common filesystem cap + warnings
+// plumbing).
 type generateFlags struct {
-	commonFlags
+	emitFlags
 	OutDir string
 	Stdout bool
 	Format string
@@ -45,7 +48,7 @@ delimited JSON instead of writing files.`,
 			return runGenerate(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, args)
 		},
 	}
-	f.attach(cmd)
+	f.attachEmit(cmd)
 	cmd.Flags().StringVarP(&f.OutDir, "out", "o", "./sbom", "output directory for per-primary SBOMs")
 	cmd.Flags().BoolVar(&f.Stdout, "stdout", false, "write NDJSON to stdout instead of files")
 	cmd.Flags().StringVar(&f.Format, "format", "cyclonedx", "output format (cyclonedx | spdx)")
