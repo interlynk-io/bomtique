@@ -9,14 +9,14 @@ import (
 	"github.com/interlynk-io/bomtique/internal/safefs"
 )
 
-// commonFlags is the flag bundle genuinely shared between `generate`
+// commonFlags is the flag bundle genuinely shared between `scan`
 // and `validate`. Both commands do filesystem reads (for hash targets,
 // license texts, patch diffs) and both route warnings through the
 // same diag channel.
 //
 // Anything that only matters for SBOM emission — tag filtering,
 // deterministic timestamps, post-emit schema validation — lives on
-// generateFlags instead. Help output stays tight.
+// scanFlags instead. Help output stays tight.
 type commonFlags struct {
 	MaxFileSize      int64
 	WarningsAsErrors bool
@@ -35,7 +35,7 @@ func (f *commonFlags) attach(cmd *cobra.Command) {
 		"log each manifest file as it's parsed, plus silently-skipped paths (§12.5)")
 }
 
-// emitFlags layers generate-only flags on top of commonFlags. These
+// emitFlags layers scan-only flags on top of commonFlags. These
 // only make sense when an SBOM is actually being produced:
 //
 //   - --tag filters the pool before reachability.

@@ -1,10 +1,10 @@
 # Usage
 
 `bomtique` reads Component Manifest v1 files and emits one SBOM per
-primary manifest. Three subcommands cover the surface: `generate`,
+primary manifest. Three subcommands cover the surface: `scan`,
 `validate`, `manifest schema`.
 
-## `bomtique generate [paths...]`
+## `bomtique scan [paths...]`
 
 Parses the supplied manifests (file paths, globs, or directories — see
 [discovery.md](discovery.md)), runs the full validator, builds the
@@ -12,10 +12,10 @@ shared components pool, resolves per-primary reachability, and emits
 one SBOM per primary.
 
 ```
-bomtique generate                              # walk CWD for discoverable manifests
-bomtique generate ./my-service                 # walk a specific dir
-bomtique generate .primary.json .components.json
-bomtique generate "pkg-manifests/*.json"
+bomtique scan                              # walk CWD for discoverable manifests
+bomtique scan ./my-service                 # walk a specific dir
+bomtique scan .primary.json .components.json
+bomtique scan "pkg-manifests/*.json"
 ```
 
 ### Flags
@@ -63,7 +63,7 @@ bomtique generate "pkg-manifests/*.json"
 ## `bomtique validate [paths...]`
 
 Runs structural + semantic validation without emitting any SBOM. Takes
-the same path / discovery semantics as `generate` and honours
+the same path / discovery semantics as `scan` and honours
 `--max-file-size`, `--tag`, and `--warnings-as-errors`.
 
 ```

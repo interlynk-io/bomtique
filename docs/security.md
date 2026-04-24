@@ -29,7 +29,7 @@ chains resolve → no-symlink → regular-file check → `os.Open`. Discovery
 (M11) applies the same rule: symlink entries encountered during the
 walk are skipped regardless of target type.
 
-The `--follow-symlinks` flag is accepted by `bomtique generate` /
+The `--follow-symlinks` flag is accepted by `bomtique scan` /
 `validate` for forward compatibility but is not yet wired; symlinks
 are refused unconditionally today.
 

@@ -14,7 +14,7 @@ Given the same:
 - referenced on-disk files (license texts, hashed files, patch diffs),
 - `SOURCE_DATE_EPOCH`,
 
-...two invocations of `bomtique generate` produce identical output
+...two invocations of `bomtique scan` produce identical output
 bytes. Regression-tested by
 [`cmd/bomtique/conformance_test.go`](../cmd/bomtique/conformance_test.go)'s
 `TestConformance_Determinism` sweep.

@@ -8,15 +8,15 @@ import (
 	"testing"
 )
 
-// TestGenerate_OutputValidateCycloneDX asserts that a normal CDX run
+// TestScan_OutputValidateCycloneDX asserts that a normal CDX run
 // with --output-validate compiles the schema, validates the emitted
 // output, and exits 0. This is the positive check: bomtique's own
 // emitter produces schema-conformant CycloneDX 1.7 JSON.
-func TestGenerate_OutputValidateCycloneDX(t *testing.T) {
+func TestScan_OutputValidateCycloneDX(t *testing.T) {
 	appendix := filepath.Join("..", "..", "internal", "manifest", "testdata", "appendix")
 	out := t.TempDir()
 	_, _, err := withArgs(t,
-		"generate",
+		"scan",
 		filepath.Join(appendix, "b3_server_primary.json"),
 		filepath.Join(appendix, "b3_shared_components.json"),
 		"--out", out,
@@ -28,12 +28,12 @@ func TestGenerate_OutputValidateCycloneDX(t *testing.T) {
 	}
 }
 
-// TestGenerate_OutputValidateSPDX asserts the same for SPDX 2.3.
-func TestGenerate_OutputValidateSPDX(t *testing.T) {
+// TestScan_OutputValidateSPDX asserts the same for SPDX 2.3.
+func TestScan_OutputValidateSPDX(t *testing.T) {
 	appendix := filepath.Join("..", "..", "internal", "manifest", "testdata", "appendix")
 	out := t.TempDir()
 	_, _, err := withArgs(t,
-		"generate",
+		"scan",
 		filepath.Join(appendix, "b1.json"),
 		"--format", "spdx",
 		"--out", out,

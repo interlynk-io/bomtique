@@ -73,7 +73,7 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(
-		newGenerateCmd(),
+		newScanCmd(),
 		newValidateCmd(),
 		newManifestCmd(),
 	)
