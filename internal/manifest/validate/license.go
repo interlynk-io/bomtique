@@ -119,10 +119,8 @@ func isSimpleSPDXID(id string) bool {
 		return false
 	}
 	for _, r := range id {
-		switch {
-		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
-			return false
-		case r == '(' || r == ')':
+		switch r {
+		case ' ', '\t', '\n', '\r', '(', ')':
 			return false
 		}
 	}

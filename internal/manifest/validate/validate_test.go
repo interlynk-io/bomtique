@@ -54,9 +54,15 @@ func simpleComponent(name, version string) manifest.Component {
 	}
 }
 
-// expectKind asserts that errs contains exactly one Error of kind k (in
-// any position), returning that error for deeper assertions.
-func expectKind(t *testing.T, errs []validate.Error, k validate.Kind) validate.Error {
+// expectKind asserts that errs contains exactly one Error of kind k.
+// Tests that need the Error value for deeper assertions should call
+// expectKindReturning instead.
+func expectKind(t *testing.T, errs []validate.Error, k validate.Kind) {
+	t.Helper()
+	expectKindReturning(t, errs, k)
+}
+
+func expectKindReturning(t *testing.T, errs []validate.Error, k validate.Kind) validate.Error {
 	t.Helper()
 	var matches []validate.Error
 	for _, e := range errs {
@@ -130,7 +136,7 @@ func TestComponent_TypeEnum(t *testing.T) {
 		Type: strPtr("notarealtype"),
 	})
 	errs := validate.Manifest(m, skipFS)
-	e := expectKind(t, errs, validate.ErrEnumValue)
+	e := expectKindReturning(t, errs, validate.ErrEnumValue)
 	if e.Value != "notarealtype" {
 		t.Fatalf("value: got %q", e.Value)
 	}
@@ -219,7 +225,7 @@ func TestLicense_TextsIDAppearsInExpression(t *testing.T) {
 		},
 	})
 	errs := validate.Manifest(m, skipFS)
-	e := expectKind(t, errs, validate.ErrLicense)
+	e := expectKindReturning(t, errs, validate.ErrLicense)
 	if !strings.Contains(e.Message, "does not appear") {
 		t.Fatalf("wrong message: %v", e)
 	}
