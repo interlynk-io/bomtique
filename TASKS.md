@@ -245,21 +245,55 @@ section a task implements.
 
 ## M8 — Determinism (`internal/emit/cyclonedx` + `internal/jcs`)
 
-- [ ] `bom-ref` derivation [§15.1]: explicit → purl → `pkg:generic/<pct-name>@<version>`
-      using RFC 3986 §2.3 unreserved set; drop `@version` if no version;
-      reject collisions.
-- [ ] Sorting [§15.2]: `components[]` by bom-ref; `dependencies[].dependsOn`
-      by ref; `hashes` by (algorithm, value); `externalReferences` by (type, url);
-      `tags` lexicographic (not serialized but sort early so any downstream
-      user sees stable values).
-- [ ] `SOURCE_DATE_EPOCH` handling [§15.3]: parse; set `metadata.timestamp`
-      ISO 8601 UTC second precision; UUIDv5 serial.
-- [ ] JCS (RFC 8785) [§15.3] `internal/jcs`: number canonicalization (ECMA-404
-      double → shortest round-trip), string escaping, key sorting, no
-      whitespace. Test against the RFC 8785 test vectors.
-- [ ] UUIDv5 over `component-manifest/v1/serial/<sha256-of-jcs-components>` in
-      DNS namespace [§15.3]; emit `urn:uuid:<uuid>` for serialNumber.
-- [ ] Determinism harness test: run twice, `diff` bytes, must be identical.
+- [x] `bom-ref` derivation [§15.1] landed with M7; retained here for the
+      §15 checklist. Explicit → canonical purl → `pkg:generic/<pct>@<ver>`
+      (RFC 3986 §2.3 unreserved), `@version` dropped when absent,
+      collisions rejected via `assignBOMRefs`.
+- [x] Sorting [§15.2] in `internal/emit/cyclonedx/sort.go`:
+      `components[]` by bom-ref; `dependencies[]` and every
+      `dependsOn` list by ref; per-component `hashes` by (alg, content)
+      and `externalReferences` by (type, url); pedigree sub-components
+      recursively. Applied before Marshal so the serialised output is
+      byte-stable without a post-pass.
+- [x] `SOURCE_DATE_EPOCH` handling [§15.3]:
+      `internal/emit/cyclonedx/determinism.go` resolves the override
+      precedence (`Options.SourceDateEpoch` → env var); negative values
+      rejected with a named error. Timestamp formatted ISO 8601 UTC
+      second precision via `time.Format("2006-01-02T15:04:05Z")`.
+      Serial number derived via the JCS path below when SDE is set;
+      otherwise `serialNumber` is omitted (consumer MAY generate a
+      UUIDv4 at the CLI layer, per §15.3 last paragraph).
+- [x] JCS (RFC 8785) [§15.3] in `internal/jcs/jcs.go`:
+  - [x] Number canonicalisation implements ECMA-262 toString: integer
+        form for `k ≤ n ≤ 21`, decimal form for `0 < n ≤ 21`, leading-
+        zero decimal for `-6 < n ≤ 0`, scientific otherwise. Exponent
+        normalised to mandatory sign + no-leading-zero digits. `-0`
+        collapses to `0`; NaN/Inf rejected.
+  - [x] String escaping: `\"`, `\\`, `\b`/`\f`/`\n`/`\r`/`\t`, and
+        `\u00NN` (lowercase hex) for any other C0 control char. Other
+        characters including the solidus `/` pass through unescaped;
+        non-ASCII is emitted as UTF-8 bytes.
+  - [x] Key sorting in UTF-16 code-unit order via `utf16.Encode`,
+        matching RFC 8785 §3.2.3 (BMP-only inputs sort identically to
+        byte order; non-BMP surrogate-pair sequences covered by the
+        explicit UTF-16 encoding).
+  - [x] Whitespace stripped; arrays preserve input order.
+  - [x] Tests cover keys (flat + nested), numbers (`10e3`, `1e21`,
+        `1e-6`, `1e-7`, `-0`, `-2.5e10`, etc.), string escapes (incl.
+        control char → ``), compound documents, idempotence,
+        and parse/trailing-content errors.
+- [x] UUIDv5 over `component-manifest/v1/serial/<sha256-of-jcs-components>`
+      in the RFC 4122 DNS namespace [§15.3] via
+      `computeDeterministicSerial`. `components[]` is already §15.2-
+      sorted by the time the serial is computed; output form is
+      `urn:uuid:<UUID>`.
+- [x] Determinism harness test: `TestDeterminism_ByteIdentical` runs
+      `Emit` twice against a rich fixture with SDE set and asserts
+      `bytes.Equal`. Companion tests cover component/hashes/extref/
+      dependsOn sorting, timestamp formatting, UUIDv5 stability
+      across runs and reshaped `components[]`, env-vs-opts
+      equivalence, negative-SDE rejection, and absence of timestamp/
+      serialNumber when SDE is unset.
 
 ## M9 — CLI surface (`cmd/bomtique`)
 
