@@ -49,10 +49,70 @@ to:
 
 ## Network refusal (§18.3)
 
-bomtique makes **no network requests** during normal operation. URLs
-in `external_references[].url`, `pedigree.patches[].diff.url` (when
-`http://` or `https://`), and `pedigree.commits[].url` are recorded
-in the output SBOM verbatim and never dereferenced.
+`bomtique scan`, `bomtique validate`, and the SBOM emitters make
+**no network requests**. URLs in `external_references[].url`,
+`pedigree.patches[].diff.url` (when `http://` or `https://`), and
+`pedigree.commits[].url` are recorded in the output SBOM verbatim
+and never dereferenced.
+
+The only network surface in the binary is the `internal/regfetch`
+package, used exclusively by `bomtique manifest add` and
+`bomtique manifest update` under `--online` (opt-in on update,
+default-on-match on add). A consumer-path lint test
+(`TestNoNetworkImportsOutsideRegfetch`) walks every production `.go`
+file and fails if `net/http`, `net.Dial`, or `net.DefaultResolver`
+is referenced outside `cmd/bomtique/` and `internal/regfetch/`.
+
+### Importer network model
+
+Each importer speaks to one well-known JSON endpoint per registry.
+No tarballs, no clones, no archive extraction.
+
+| Importer | Endpoints | Auth |
+|----------|-----------|------|
+| GitHub | `api.github.com/repos/{o}/{r}`, `.../git/ref/tags/{tag}` | `GITHUB_TOKEN` → `Authorization: Bearer` |
+| GitLab | `gitlab.com/api/v4/projects/{encoded}`, `.../repository/tags/{tag}` | `GITLAB_TOKEN` → `PRIVATE-TOKEN` |
+| npm | `registry.npmjs.org/{name}` (abbreviated metadata) or `/{name}/{version}` | — |
+| PyPI | `pypi.org/pypi/{name}/json` or `.../{name}/{version}/json` | — |
+| crates.io | `crates.io/api/v1/crates/{name}`, `.../{version}` | — |
+
+The shared `regfetch.Client` enforces:
+
+- 30 s total request timeout.
+- 1 MiB response-body cap via `io.LimitReader` (`ErrResponseTooLarge`
+  on overrun). Larger-than-cap responses indicate an unexpected
+  registry shape; the code path rejects rather than truncating.
+- `Accept: application/json` on every request.
+- `User-Agent: bomtique/<version> (+https://github.com/interlynk-io/bomtique)`
+  — satisfies crates.io ToS (which requires a contact URL) and
+  identifies the client in registry access logs.
+- No retries. A transient failure surfaces as `ErrNetwork`; the
+  caller re-runs the command.
+
+### Host allowlist
+
+Each importer's base URL is fixed to its registry host by default.
+Overrides via `BOMTIQUE_{GITHUB,GITLAB,NPM,PYPI,CARGO}_BASE_URL`
+env vars exist for tests, mirrors, air-gapped deployments, and
+self-hosted GitLab. The overrides are evaluated only when the
+corresponding importer already matches the input ref, so an env
+var cannot redirect, say, a pkg:github ref to a non-GitHub host.
+
+### Token handling
+
+- Tokens are read from the environment at Fetch time, not stored in
+  the Client struct. Verbose output scrubs them; error messages
+  never format request headers. Dedicated per-importer tests
+  (`Test*_FetchTokenNotLeakedInErrors`) pin that invariant.
+- The Client carries no credential material; a fresh `NewClient()`
+  is safe to log.
+
+### Opt-out: `--offline`
+
+Users who need absolute network silence pass `--offline` to
+`manifest add` / `manifest update`. The code path that would touch
+`regfetch` is bypassed entirely; no DNS lookup, no TCP connect.
+`--offline` and `--online` are mutually exclusive.
 
 ## Hash algorithm allowlist (§8.1, §18.5)
 

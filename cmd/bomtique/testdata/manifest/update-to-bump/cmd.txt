@@ -1,0 +1,10 @@
+# --to 2.0.0 should bump both version AND the purl's version
+# segment in lockstep. Offline so the global registry doesn't
+# chase the pkg:generic purl (which no importer claims anyway,
+# but belt and braces).
+manifest
+update
+pkg:generic/acme/libx@1.0.0
+--to
+2.0.0
+--offline

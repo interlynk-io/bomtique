@@ -1,0 +1,15 @@
+{
+  "schema": "primary-manifest/v1",
+  "primary": {
+    "name": "acme-app",
+    "version": "1.0.0",
+    "type": "application",
+    "license": {
+      "expression": "Apache-2.0"
+    },
+    "purl": "pkg:generic/acme/acme-app@1.0.0",
+    "depends-on": [
+      "pkg:generic/acme/target@1.0"
+    ]
+  }
+}

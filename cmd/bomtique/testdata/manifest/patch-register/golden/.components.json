@@ -1,0 +1,35 @@
+{
+  "schema": "component-manifest/v1",
+  "components": [
+    {
+      "name": "libx",
+      "version": "1.0",
+      "license": {
+        "expression": "MIT"
+      },
+      "purl": "pkg:generic/acme/libx@1.0",
+      "pedigree": {
+        "patches": [
+          {
+            "type": "backport",
+            "diff": {
+              "url": "./patches/fix-cve-2024-1.patch"
+            },
+            "resolves": [
+              {
+                "type": "security",
+                "name": "CVE-2024-1",
+                "url": "https://example.com/cve/2024-1"
+              },
+              {
+                "type": "defect",
+                "name": "BUG-42"
+              }
+            ]
+          }
+        ],
+        "notes": "Backported to fix CVE-2024-1 and BUG-42"
+      }
+    }
+  ]
+}

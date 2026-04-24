@@ -1,0 +1,19 @@
+{
+  "schema": "component-manifest/v1",
+  "components": [
+    {
+      "name": "libx",
+      "version": "1.0",
+      "license": {
+        "expression": "MIT"
+      },
+      "purl": "pkg:generic/acme/libx@1.0",
+      "external_references": [
+        {
+          "type": "website",
+          "url": "https://example.com/libx"
+        }
+      ]
+    }
+  ]
+}

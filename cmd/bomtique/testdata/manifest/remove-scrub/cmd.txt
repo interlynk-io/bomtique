@@ -1,0 +1,5 @@
+# Remove a component depended on by both the primary and one
+# sibling. Both depends-on edges should be scrubbed.
+manifest
+remove
+pkg:generic/acme/target@1.0

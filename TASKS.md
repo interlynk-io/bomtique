@@ -1016,26 +1016,46 @@ milestone.
 
 ### M14.13 — Docs, conformance, release
 
-- [ ] `docs/usage.md`: add sections for `manifest init`,
-      `manifest add`, `manifest remove`, `manifest update`,
-      `manifest patch`; examples for each importer; network policy
-      recap (`--offline`, `--online`, token env vars, 1 MiB response
-      cap, no retries).
-- [ ] `docs/security.md`: add an "importer network model" section
-      documenting the allowed hosts per importer, the response cap,
-      token handling and scrubbing, and the opt-in/opt-out flag shape.
-- [ ] `docs/discovery.md`: note that mutation commands reuse the same
-      walk semantics as `scan`/`validate` (same `.git`/`node_modules`/
-      etc. exclusions).
-- [ ] Conformance fixtures under `cmd/bomtique/testdata/manifest/`:
-      one directory per subcommand, with input tree + stdin + golden
-      output tree. `TestConformance_Determinism`-style rerun proves
-      byte-stable output.
-- [ ] `CHANGELOG.md`: v0.2.0 entry covering M14.0–M14.12.
-- [ ] Dogfood: regenerate `.primary.json` + every `.components.json`
-      entry via `manifest init` + `manifest add` against a throwaway
-      dir, byte-compare against the committed files to prove
-      round-trip stability.
+- [x] `docs/usage.md`: expanded with `manifest init`, `manifest add`
+      (flag-driven, `--from`, registry auto-fetch, `--vendored-at`,
+      `--primary`), `manifest remove`, `manifest update`,
+      `manifest patch`. Importer matrix (github/gitlab/npm/pypi/
+      cargo), env-var catalogue (GITHUB_TOKEN / GITLAB_TOKEN plus
+      the five base-URL overrides), and the `--offline` /
+      `--online` / rate-limit / 1 MiB cap policy recap.
+- [x] `docs/security.md`: new "importer network model" section —
+      per-importer endpoint list, shared Client policy (30 s
+      timeout, 1 MiB cap, no retries, default UA), host allowlist
+      rule (env-var overrides only redirect their matching
+      importer), token handling and scrubbing (tests cited),
+      `--offline` opt-out.
+- [x] `docs/discovery.md`: adds a "Mutation commands" section
+      documenting that `add` walks up, remove/update/patch walk
+      down, and all share the same exclusion set plus symlink
+      refusal.
+- [x] Conformance fixtures under `cmd/bomtique/testdata/manifest/`
+      covering `init-basic`, `add-pool`, `remove-scrub`,
+      `update-to-bump`, `patch-register`. Harness at
+      `cmd/bomtique/manifest_conformance_test.go` seeds an
+      `initial/` tree into a tmpdir, runs the recorded command
+      (one arg per line in `cmd.txt`), and byte-compares the
+      result against `golden/`. Regenerate via
+      `BOMTIQUE_REGENERATE_MANIFEST_GOLDEN=1`. Companion
+      `TestManifestConformance_Determinism` reruns each fixture
+      against a second tmpdir and asserts the trees are byte-
+      identical.
+- [x] `CHANGELOG.md`: Unreleased / v0.2.0 preview entry covers
+      M14.0–M14.12 with the mutation commands, registry
+      importers, network policy, and doc updates. Known deferred
+      items remain listed in-line with their owning milestones
+      (conformance expansion, importer-specific flags, etc.).
+- [ ] Dogfood: regenerate `.primary.json` + every
+      `.components.json` entry via `manifest init` + `manifest
+      add` against a throwaway dir, byte-compare against the
+      committed files to prove round-trip stability.  *Deferred:
+      the committed dogfood files pre-date the mutate canonical
+      writer and differ from it in whitespace; a follow-up will
+      regenerate them in a dedicated PR.*
 
 ### M14 cross-cutting invariants (asserted in tests)
 

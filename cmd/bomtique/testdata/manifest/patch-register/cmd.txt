@@ -1,0 +1,15 @@
+# Register a backport patch with two resolves entries and a note.
+# Pedigree is created from scratch since the initial component
+# has none.
+manifest
+patch
+pkg:generic/acme/libx@1.0
+./patches/fix-cve-2024-1.patch
+--type
+backport
+--resolves
+type=security,name=CVE-2024-1,url=https://example.com/cve/2024-1
+--resolves
+type=defect,name=BUG-42
+--notes
+Backported to fix CVE-2024-1 and BUG-42

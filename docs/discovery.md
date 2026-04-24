@@ -65,3 +65,24 @@ discovery and files supplied explicitly on the command line. A file
 with a malformed marker (for example, `primary-manifest/v2`) is a
 hard error — discovery finds the file, the parser rejects the
 unsupported version, and the run fails with the specific error message.
+
+## Mutation commands
+
+`bomtique manifest {init,add,remove,update,patch}` use the same walk
+semantics as `scan` and `validate`:
+
+- `init` writes `.primary.json` in the target directory (CWD or
+  `-C <dir>`) — no walk.
+- `add` walks **up** from CWD looking for a `.primary.json` to
+  anchor the target components manifest; the same exclusion set
+  (`.git`, `node_modules`, `vendor`, `.venv`, `testdata`, any
+  `.`-prefixed directory) terminates the walk.
+- `remove`, `update`, and `patch` walk **down** from the primary
+  directory looking for `.components.json` and `.components.csv`,
+  honouring the same exclusion set and refusing to follow symlinks.
+
+The net effect: a mutation command only ever touches files inside
+the primary's directory tree. `--into <path>` overrides the auto-
+location and MUST resolve under the target manifest's directory
+(safefs rejects `..` traversal, absolute paths, and UNC / drive-
+letter shapes).
