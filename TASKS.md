@@ -39,21 +39,24 @@ section a task implements.
 
 ## M1 — Manifest model and parsing
 
-- [ ] Go types: `Manifest`, `PrimaryManifest`, `ComponentsManifest`, `Component`,
+- [x] Go types: `Manifest`, `PrimaryManifest`, `ComponentsManifest`, `Component`,
       `Supplier`, `License`, `LicenseText`, `Hash`, `ExternalRef`, `Pedigree`,
       `Ancestor`, `Patch`, `Diff`, `Attachment`, `Commit`, `Resolves`, `Lifecycle`.
       Use pointer fields where absence is semantically distinct from zero value.
-- [ ] JSON parser [§4, §5]: strict UTF-8 check, reject invalid sequences; reject
-      duplicate keys (use `json.Decoder.DisallowUnknownFields`? no — §6.2 says
-      preserve unknowns; instead capture unknowns into a sidecar map).
-- [ ] CSV parser [§4.5, §4.5.1]: BOM strip; accept CRLF + LF; first non-blank
+- [x] JSON parser [§4, §5]: strict UTF-8 check, reject invalid sequences; reject
+      duplicate keys via a token-walk pre-pass; capture unknown top-level and
+      component fields into sidecar `Unknown` maps per §5.1, §5.2, §6.2;
+      accept string-shorthand `license` and string-or-attachment `diff.text`.
+- [x] CSV parser [§4.5, §4.5.1]: BOM strip; accept CRLF + LF; first non-blank
       line is the `#...` marker; second is fixed column header (exact match);
       skip blank/whitespace-only lines; enforce `hash_value` XOR `hash_file`;
       comma-split `depends_on` and `tags` with RFC4180 quoting.
-- [ ] Schema marker detection [§4.4]: route to primary vs components path;
+      `#primary-manifest/v1` in CSV is rejected (§4.1 — primary manifests are JSON-only).
+- [x] Schema marker detection [§4.4]: route to primary vs components path;
       reject `primary-manifest/*` or `component-manifest/*` that is not exactly
-      `v1`; files without any marker are silently ignored by discovery (M11).
-- [ ] Round-trip tests for every Appendix B example (B.1–B.8).
+      `v1`; files without any marker return `ErrNoSchemaMarker` so discovery
+      (M11) can silently ignore them.
+- [x] Round-trip tests for every Appendix B example (B.1–B.8).
 
 ## M2 — Path and security primitives (`internal/safefs`)
 

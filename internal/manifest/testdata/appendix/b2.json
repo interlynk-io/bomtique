@@ -1,0 +1,14 @@
+{
+  "schema": "component-manifest/v1",
+  "components": [
+    {
+      "name": "libmqtt",
+      "version": "4.3.0",
+      "license": "EPL-2.0",
+      "purl": "pkg:generic/acme/libmqtt@4.3.0",
+      "hashes": [
+        { "algorithm": "SHA-256", "value": "9f86d08..." }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "component-manifest/v1",
+  "components": [
+    {
+      "name": "vendor-parser",
+      "version": "2.4.0",
+      "type": "library",
+      "license": { "expression": "MIT", "texts": [{ "id": "MIT", "file": "./LICENSE" }] },
+      "purl": "pkg:github/acme/device-firmware/src/vendor-parser@2.4.0",
+      "hashes": [
+        { "algorithm": "SHA-256", "path": "./src/vendor/", "extensions": ["c", "h"] }
+      ],
+      "pedigree": {
+        "ancestors": [
+          { "purl": "pkg:github/upstream-org/upstream-lib@2.4.0" }
+        ],
+        "patches": [
+          {
+            "type": "backport",
+            "diff": { "url": "./patches/fix-int-overflow.patch" },
+            "resolves": [
+              { "type": "security", "name": "CVE-2024-XXXXX" }
+            ]
+          }
+        ],
+        "notes": "Forked at commit abc123; local fix for integer overflow."
+      }
+    }
+  ]
+}
