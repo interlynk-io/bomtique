@@ -19,6 +19,8 @@ import (
 	"github.com/interlynk-io/bomtique/internal/manifest"
 	"github.com/interlynk-io/bomtique/internal/manifest/validate"
 	"github.com/interlynk-io/bomtique/internal/pool"
+	"github.com/interlynk-io/bomtique/internal/schema"
+	vendored "github.com/interlynk-io/bomtique/schemas"
 )
 
 // generateFlags layers output-specific flags on top of the common set.
@@ -59,9 +61,6 @@ func runGenerate(stdout, stderr io.Writer, f *generateFlags, args []string) erro
 	if f.FollowSymlinks {
 		_, _ = fmt.Fprintln(stderr, "warning: --follow-symlinks is accepted but safefs has no opt-in path today; symlinks will still be refused")
 		diag.Warn("--follow-symlinks requested but safefs opt-in is not yet wired — refusing symlinks as usual (§18.2)")
-	}
-	if f.OutputValidate {
-		_, _ = fmt.Fprintln(stderr, "warning: --output-validate is accepted but no schema is bundled yet; skipping validation")
 	}
 
 	diag.Reset()
@@ -105,9 +104,17 @@ func runGenerate(stdout, stderr io.Writer, f *generateFlags, args []string) erro
 		return newExitErr(exitValidationError, fmt.Errorf("graph index: %w", err))
 	}
 
+	var validator *schema.Validator
+	if f.OutputValidate {
+		validator, err = buildValidator(f.Format)
+		if err != nil {
+			return newExitErr(exitValidationError, err)
+		}
+	}
+
 	multi := len(ps.Primaries) > 1
 	for _, pm := range ps.Primaries {
-		if err := emitOne(stdout, stderr, f, pm, p, idx, prov, multi); err != nil {
+		if err := emitOne(stdout, stderr, f, pm, p, idx, prov, multi, validator); err != nil {
 			return err
 		}
 	}
@@ -121,8 +128,10 @@ func runGenerate(stdout, stderr io.Writer, f *generateFlags, args []string) erro
 
 // emitOne runs pool distinctness + reachability + SBOM emission (in
 // the requested format) for a single primary manifest and writes the
-// result out.
-func emitOne(stdout, stderr io.Writer, f *generateFlags, pm *manifest.Manifest, p *pool.Pool, idx *graph.PoolIndex, prov provenanceIndex, multiPrimary bool) error {
+// result out.  When `validator` is non-nil (i.e. `--output-validate`
+// was requested), the emitted bytes are checked against the vendored
+// schema before being written, and a schema failure aborts the run.
+func emitOne(stdout, stderr io.Writer, f *generateFlags, pm *manifest.Manifest, p *pool.Pool, idx *graph.PoolIndex, prov provenanceIndex, multiPrimary bool, validator *schema.Validator) error {
 	primary := &pm.Primary.Primary
 
 	if err := pool.CheckPrimaryDistinct(primary, p); err != nil {
@@ -145,6 +154,13 @@ func emitOne(stdout, stderr io.Writer, f *generateFlags, pm *manifest.Manifest, 
 	}
 	if err != nil {
 		return newExitErr(exitValidationError, fmt.Errorf("%s: emit: %w", pm.Path, err))
+	}
+
+	if validator != nil {
+		if err := validator.Validate(data); err != nil {
+			return newExitErr(exitValidationError,
+				fmt.Errorf("%s: output schema validation failed: %w", pm.Path, err))
+		}
 	}
 
 	if f.Stdout {
@@ -250,4 +266,33 @@ func printValidationErrors(stderr io.Writer, errs []validate.Error) {
 	for _, e := range errs {
 		_, _ = fmt.Fprintln(stderr, "validation:", e.Error())
 	}
+}
+
+// buildValidator returns a schema.Validator for the chosen output
+// format. `--output-validate` wires this up once at the start of a
+// run and reuses it across every emitted primary.
+func buildValidator(format string) (*schema.Validator, error) {
+	switch format {
+	case "cyclonedx":
+		fsys, entry, err := vendored.CycloneDX17()
+		if err != nil {
+			return nil, fmt.Errorf("schema bundle: %w", err)
+		}
+		v, err := schema.New(fsys, entry)
+		if err != nil {
+			return nil, fmt.Errorf("compile CycloneDX schema: %w", err)
+		}
+		return v, nil
+	case "spdx":
+		fsys, entry, err := vendored.SPDX23()
+		if err != nil {
+			return nil, fmt.Errorf("schema bundle: %w", err)
+		}
+		v, err := schema.New(fsys, entry)
+		if err != nil {
+			return nil, fmt.Errorf("compile SPDX schema: %w", err)
+		}
+		return v, nil
+	}
+	return nil, fmt.Errorf("schema validator: no schema bundled for format %q", format)
 }

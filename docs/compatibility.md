@@ -69,9 +69,6 @@ milestone PRs.
 - **Appendix A JSON Schema.** `bomtique manifest schema` prints a
   draft-2020-12 placeholder today; the canonical schema is still being
   authored. The Go validator is authoritative.
-- **`--output-validate`.** Accepted for forward compatibility but does
-  nothing yet. Vendoring the CycloneDX 1.7 and SPDX 2.3 schemas and
-  wiring post-emit validation is a follow-up.
 - **`--follow-symlinks` opt-in path.** Accepted but always falls back
   to refusal. The spec (§18.2) allows this as opt-in; we haven't
   implemented it yet.
