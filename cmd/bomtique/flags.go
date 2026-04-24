@@ -48,7 +48,7 @@ type emitFlags struct {
 }
 
 func (f *emitFlags) attachEmit(cmd *cobra.Command) {
-	f.commonFlags.attach(cmd)
+	f.attach(cmd)
 	cmd.Flags().StringSliceVar(&f.Tags, "tag", nil,
 		"filter pool components to those whose tags include any listed value (§6.2)")
 	cmd.Flags().Int64Var(&f.SourceDateEpoch, "source-date-epoch", 0,
