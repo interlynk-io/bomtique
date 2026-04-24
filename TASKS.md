@@ -60,16 +60,22 @@ section a task implements.
 
 ## M2 — Path and security primitives (`internal/safefs`)
 
-- [ ] `ResolveRelative(manifestDir, p)` [§4.3]: reject absolute POSIX, Windows
-      drive-letter, and UNC paths; reject any post-resolution path escaping
-      `manifestDir` via `..`; NFC-normalize before use [§4.6].
-- [ ] Symlink-safe open [§18.2]: walk each path component from `manifestDir`
-      and stat without following; reject if any component is a symlink.
-      No `os.Open`-then-check; do `Lstat` per segment.
-- [ ] File-size cap (default 10 MiB, configurable via `--max-file-size`) [§8].
-      Reads use `io.LimitReader` and fail on EOF-before-limit overrun.
-- [ ] Tests covering: `..` traversal, drive-letter, UNC, symlink in any
-      component, NFC vs NFD input, oversize file, missing file.
+- [x] `ResolveRelative(manifestDir, p)` [§4.3]: reject absolute POSIX, Windows
+      drive-letter (incl. drive-relative `X:foo`), UNC (`\\…`, `//…`), and
+      rooted (`\foo`) paths; reject any post-resolution path escaping
+      `manifestDir` via `..`; NFC-normalize both sides before use [§4.6];
+      reject empty and NUL-bearing paths.
+- [x] Symlink-safe open [§18.2]: `CheckNoSymlinks` walks each path component
+      from `manifestDir` and `Lstat`s per segment; `Open` / `ReadFile` chain
+      resolve → no-symlink → regular-file check → open.
+- [x] File-size cap (default 10 MiB via `DefaultMaxFileSize`) [§8]. Streaming
+      `cappedFile` reader returns `ErrFileTooLarge` on overrun rather than
+      silently truncating; `ReadFile` and `Open` share the cap logic.
+- [x] Tests covering: `..` traversal, POSIX absolute, UNC (both slashes),
+      drive-letter (upper/lower/forward/relative), rooted, empty, NUL byte,
+      NFC-vs-NFD input, symlink as target, symlink as intermediate directory,
+      oversize (one-shot and streaming), exact-cap, missing file, directory
+      as file.
 
 ## M3 — Hashing (`internal/hash`)
 
