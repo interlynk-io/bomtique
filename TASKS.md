@@ -453,11 +453,456 @@ section a task implements.
       Left to the repo owner to cut the tag; `goreleaser release` is
       wired and ready.
 
+## M14 — Hand-authored manifest mutation (`bomtique manifest init|add|remove|update|patch`)
+
+A CRUD surface over primary and components manifests. Extends the
+existing `bomtique manifest` subcommand group. Pure metadata: no
+`git clone`, no tarball fetch, no archive extraction. Metadata-only
+registry lookups (HTTPS GET against well-known JSON endpoints) are
+opt-in per command and are the ONLY network access added by this
+milestone.
+
+### M14.0 — Mutation primitives (`internal/manifest/mutate`)
+
+- [x] New package `internal/manifest/mutate` holding the parse-edit-
+      rewrite engine shared by every M14 subcommand.
+- [x] `WriteJSON(w, *Manifest)` lands with 2-space indent + trailing
+      newline. The custom `MarshalJSON` methods already in
+      `internal/manifest/json.go` now append Unknown keys in sorted
+      order (additive change; fixtures with no unknowns still round-
+      trip identically). `extractUnknown` canonicalises values with
+      `json.Compact` so stored bytes survive `json.Indent` reflow and
+      a second parse observes byte-equal unknowns. Round-trip tested
+      against every Appendix B JSON fixture plus unknown-preservation
+      cases at primary, components, and component scope.
+- [x] `WriteCSV(w, *Manifest)`: emits the `#component-manifest/v1`
+      marker, the frozen §4.5 column header, one row per component,
+      LF, RFC 4180 quoting. Fails closed on components CheckFitsCSV
+      rejects (no partial writes). Round-trip tested against b8.csv.
+- [x] `LocatePrimary(fromDir string) (path string, err error)`: walks
+      up from `fromDir` for `.primary.json` whose schema marker equals
+      `primary-manifest/v1`. Honours the `cmd/bomtique/discovery`
+      exclusion set (`.git`, `node_modules`, `vendor`, `.venv`,
+      `testdata`, plus any `.`-prefixed directory) and refuses
+      symlinks. Returns `ErrPrimaryNotFound` on miss.
+- [x] `LocateOrCreateComponents(fromDir, flagInto string) (path string, created bool, err error)`:
+      `flagInto` wins (relative resolved against fromDir); else
+      nearest `.components.json` (preferred) or `.components.csv`
+      walking up; else falls back to `<primaryDir>/.components.json`
+      with `created=true`. Returns `ErrPrimaryNotFound` when no
+      primary is reachable and no `--into` was supplied.
+- [x] `MergeComponent(base, overrides *Component) (*Component, []FieldOverride)`:
+      returns a clone of base with overrides layered on top and the
+      ordered list of fields the override layer replaced. Pointer
+      scalars override when non-nil; slices override wholesale when
+      non-nil; nested objects (supplier, license, pedigree) replace
+      wholesale. Does not mutate either input.
+- [x] `CheckFitsCSV(c *Component) error`: returns a clear error
+      naming the first field (bom-ref, external_references,
+      structured license texts, directory-form hashes, multiple
+      hashes, pedigree, lifecycles, unknown fields) that CSV §4.5
+      can't carry.
+- [x] Unit tests cover Unknown preservation (including RawMessage
+      splice for nested objects), struct-order stability, CSV column
+      order and quoting, locate walk semantics, create-alongside-
+      primary, merge precedence and input immutability, CSV-fit
+      rejection per field class. Full `go test ./...` + `go vet` +
+      `gofmt -l` green; `go test -race ./internal/manifest/...` green.
+
+### M14.1 — `bomtique manifest init`
+
+- [x] Command: `bomtique manifest init --name … [--version …] [--type …] [--license …] [--purl …] [--cpe …] [--supplier …] [--supplier-email …] [--supplier-url …] [--description …] [--website …] [--vcs …] [--distribution …] [--issue-tracker …]`.
+- [x] `--force` overwrites existing `.primary.json`; default refuses
+      with `mutate.ErrPrimaryExists` (exit 1).
+- [x] `-C`/`--chdir <dir>` runs in a specific directory; default CWD.
+- [x] Default `--type` is `application` (primary is the buildable
+      output). `library` default from §7.1 applies to pool components;
+      primaries are the exception.
+- [x] Builds `PrimaryManifest` from flags, runs `validate.Manifest`
+      with `SkipFilesystem: true` (no hashes yet so no filesystem
+      reads), writes `.primary.json` atomically (tmp file + rename).
+- [x] Does NOT create `.components.json`: §5.2 forbids empty
+      `components[]`. First `add` creates it.
+- [x] Exit codes: 0 success; 1 validation or ErrPrimaryExists; 2 usage
+      (cobra MarkFlagRequired on `--name`); 3 I/O.
+- [x] Tests: happy path; default-type application; custom-type;
+      refuse existing without `--force`; accept `--force`; `--force`
+      preserves unknown top-level AND unknown component fields;
+      validation error surfaces on stderr; missing-name is usage
+      error; non-existent dir rejected; Dir=file rejected; canonical
+      indented output; whitespace trimmed; RawMessage invariant held
+      for nested JSON values. End-to-end cobra tests in
+      `cmd/bomtique/manifest_init_test.go` including a
+      `init -> validate` round-trip.
+
+### M14.2 — `bomtique manifest add` (offline paths)
+
+- [x] Command: `bomtique manifest add` with component-field flags
+      (`--name`, `--version`, `--type`, `--license`, `--purl`,
+      `--supplier`, `--supplier-email`, `--supplier-url`,
+      `--description`, `--cpe`, `--scope`, repeatable `--depends-on`,
+      repeatable `--tag`, shorthand external refs `--website`,
+      `--vcs`, `--distribution`, `--issue-tracker`, repeatable
+      `--external type=url`).
+- [x] `--from <path|->` reads a bare Component JSON object (stdin when
+      `-`); flag values override file values with one stderr note per
+      override via `internal/diag`.
+- [x] `--into <path>` picks the target components manifest; default
+      uses `LocateOrCreateComponents`.
+- [x] `--primary` writes the resolved ref (`purl` preferred; else
+      `name@version`) to the primary's `depends-on`; dedup surfaces
+      as `AlreadyPresent=true` / "unchanged" stdout, no write.
+- [x] Identity collision against existing pool (§11) rejected hard as
+      `*ErrIdentityCollision`; error names the colliding entry.
+- [x] CSV target: refuses with `CheckFitsCSV`-derived message
+      ("…; rerun with --into <json-path>").
+- [x] `--scope` ignored with `diag.Warn` when `--primary` set (§5.3);
+      the warning routes to stderr and counts for
+      `--warnings-as-errors`.
+- [x] Post-mutation pool validation via `validate.Manifest` with
+      `SkipFilesystem: true` surfaces malformed components before the
+      file is written; atomic write through tmp + rename.
+- [x] Exit codes: 0 success; 1 collision / validation / missing
+      primary / ErrInvalidRef; 2 usage (cobra flag errors, malformed
+      `--external` values); 3 I/O. Race-detector green.
+- [x] Tests cover: pool happy path with .components.json creation,
+      pool append, primary purl/name-version ref derivation, primary
+      dedup, primary scope warning, primary missing manifest, stdin
+      `--from`, file `--from`, flag override emits diag, identity
+      collision, CSV pedigree rejection, `--external type=url` parse,
+      malformed `--external`, end-to-end `init → add → validate`.
+
+### M14.3 — `bomtique manifest remove`
+
+- [x] Command: `bomtique manifest remove <ref>` where `<ref>` is a
+      `pkg:` purl or `name@version`. Parsed via `graph.ParseRef` so
+      every comparison uses the canonical form.
+- [x] Locates the component across every `.components.json` /
+      `.components.csv` reachable by walking *down* from the primary
+      directory (new `discoverComponentsManifests` helper mirrors the
+      `cmd/bomtique/discovery` exclusion set). Multi-match is a hard
+      error (`*ErrRemoveMultiMatch`); user disambiguates with
+      `--into <path>`.
+- [x] Drops the entry from `components[]` and writes the
+      corresponding manifest atomically.
+- [x] Scrubs `depends-on` references to the removed component from
+      every other pool component AND from the primary. One
+      `diag.Warn` stderr line per scrubbed edge naming the referring
+      component's identity (§10.2 ref semantics).
+- [x] `--dry-run` prints the planned mutation ("would remove …")
+      without writing. Tested byte-equality of before/after disk
+      state.
+- [x] `--primary` form: scrubs only from the primary's `depends-on`;
+      pool untouched; missing edge is a hard error so scripts don't
+      silently succeed.
+- [x] Exit codes: 0 success; 1 validation / not-found / multi-match /
+      missing primary / parse error; 2 cobra usage (wrong arg count).
+      Race-detector green.
+- [x] Tests cover: pool happy path (purl ref AND name@version ref);
+      sibling depends-on scrubbed; primary depends-on scrubbed;
+      multi-match across files; `--into` disambiguates; `--primary`
+      pool-untouched; `--primary` missing-edge error; `--dry-run`
+      writes nothing; `DependsOn` slice nils out on full scrub;
+      not-found exits 1; end-to-end `init → add → add → remove →
+      validate`.
+
+### M14.4 — `bomtique manifest update`
+
+- [x] Command: `bomtique manifest update <ref> [flags]`. Field flags
+      identical to `add`; each supplied flag replaces that field.
+      Unset flags preserved.
+- [x] `--to <version>` bumps `version`. If `purl` is present AND its
+      version segment equals the old version (parsed via
+      `internal/purl`), the purl is bumped in lockstep and
+      `UpdateResult.PurlVersionBumped` is true; otherwise the purl
+      stays as-is with a `diag.Warn` stderr line telling the user to
+      update manually.
+- [x] `--clear-license`, `--clear-description`, `--clear-supplier`,
+      `--clear-purl`, `--clear-cpe`, `--clear-scope`,
+      `--clear-external-refs`, `--clear-depends-on`, `--clear-tags`,
+      `--clear-pedigree-patches` null-out flags.
+- [x] `pedigree.patches[]` and all other pedigree sub-fields
+      preserved across updates unless `--clear-pedigree-patches` is
+      supplied.
+- [x] Directory-form hashes preserved verbatim: §15.4 recomputes at
+      `scan` time; `update` does not touch hashes.
+- [x] Identity after update stays distinct from every other pool
+      entry; collision returns `*ErrIdentityCollision`.
+- [x] `--dry-run` reports planned mutation and reverts in-memory
+      state so the on-disk file is untouched (tested with
+      byte-equality of pool file before/after).
+- [x] Exit codes: 0 success; 1 not-found / collision / validation /
+      parse / missing primary; 2 cobra usage.
+- [x] Tests cover: field replace; `--to` with purl lockstep; `--to`
+      with mismatched purl (warning, no purl change); pedigree
+      patches preserved across version bump; collision after bump;
+      `--clear-license`; `--clear-pedigree-patches`; not-found;
+      no-changes error; dry-run no-write; name@version ref;
+      `--into` narrowing.
+
+### M14.5 — `bomtique manifest patch`
+
+- [x] Command: `bomtique manifest patch <ref> <diff-path> --type unofficial|monkey|backport|cherry-pick [--resolves "key=val,key=val"]* [--notes <text>] [--replace-notes] [-C <dir>] [--into <path>] [--dry-run]`.
+- [x] Appends a `Patch` entry (§7.4) under the target component's
+      `pedigree.patches[]`. The `diff` field is emitted as
+      `{ url: <relative-path> }` pointing at the on-disk diff; bomtique
+      does not read or copy the diff file (safefs reads it at `scan`
+      time per §9.2).
+- [x] Absolute diff paths rejected via `safefs.ResolveRelative`
+      (§4.3). UNC, drive-letter, and `..` traversal escapes all
+      rejected uniformly. Error message names "diff path" so users
+      know which argument failed.
+- [x] Creates `pedigree` when absent; appends to `pedigree.patches`
+      when present; preserves existing ancestors / commits / notes.
+- [x] Repeatable `--resolves` takes key=value,key=value syntax
+      (type, name, id, url, description). Each entry MUST carry at
+      least `name=` or `id=`. Unknown keys and missing required keys
+      raise usage errors (exit 2).
+- [x] `--notes` appends to `pedigree.notes` with `\n\n` separator
+      when notes already present; `--replace-notes` overwrites.
+      Blank `--notes` is a no-op.
+- [x] Exit codes: 0 success; 1 validation / not-found / invalid
+      type / resolves parse / missing primary; 2 cobra usage (wrong
+      arg count, missing --type, malformed --resolves).
+- [x] Tests cover: first-patch-creates-pedigree; second-patch-
+      appends; invalid `--type`; absolute path rejected; traversal
+      path rejected; resolves entries produced with type+name+url;
+      invalid resolves type; resolves without name/id rejected;
+      notes append; notes replace; dry-run no-write; not-found;
+      empty diff path.
+
+### M14.6 — `bomtique manifest add --vendored-at <dir>`
+
+- [x] New flag on `add`: `--vendored-at <rel-dir>`. Dir MUST resolve
+      under the target components manifest per §4.3 (validated via
+      `safefs.ResolveRelative`) and MUST exist on disk.
+- [x] `--ext c,h,...` (comma-separated or repeatable) sets the
+      directory-hash extension filter (§8.3); lands in the emitted
+      `hashes[0].extensions`.
+- [x] `--vendored-at` cannot combine with `--primary` (hard error).
+- [x] When set, `add` synthesises three fields on the emitted
+      Component:
+  - [x] `purl`: repo-local form per §9.3 pattern 1. Derived from the
+        nearest primary's purl when that type is in
+        `{github, gitlab, bitbucket}`; otherwise hard error asking
+        the user to pass `--purl`. If `--purl` is set explicitly,
+        derivation is skipped. Uses `internal/purl.PackageURL` to
+        produce canonical form (e.g.
+        `pkg:github/acme/device-firmware/src/vendor-libx@2.4.0`).
+  - [x] `hashes[0]`: `{ algorithm: "SHA-256", path: "./<dir>/", extensions: … }`.
+        Digest NOT computed at `add` time — §15.4 defers to scan.
+        Only installed when the incoming component has no hashes
+        already (so `--from` input with hashes survives).
+  - [x] `pedigree.ancestors[0]`: built from `--upstream-name`,
+        `--upstream-version`, `--upstream-purl`, `--upstream-supplier`,
+        `--upstream-website`, `--upstream-vcs`. Name is required when
+        any `--upstream-*` flag is set (§9.1), plus at least one of
+        version/purl. Zero upstream flags → no ancestor emitted
+        (pedigree stays nil).
+- [x] If the resulting component purl (derived OR explicit) equals
+      the canonicalised upstream purl, reject per §9.3 with a
+      message citing the section.
+- [x] Tests cover: github primary derivation end-to-end; npm primary
+      requires `--purl` (error mentions `--purl`); explicit `--purl`
+      skips derivation; §9.3 purl==upstream-purl rejection; absolute
+      path rejection; traversal path rejection; missing directory
+      rejection; `--upstream-version` without `--upstream-name`
+      rejection; zero upstream flags produce hash+purl but no
+      pedigree; `--vendored-at`+`--primary` combination rejected.
+      Plus end-to-end `init → add --vendored-at → validate` via the
+      cobra surface, asserting the emitted purl matches the §9.3
+      pattern-1 canonical form.
+
+### M14.7 — Registry importer framework (`internal/regfetch`)
+
+- [ ] New package `internal/regfetch` with an `Importer` interface:
+      `Fetch(ctx, ref string) (*manifest.Component, error)`. Registry
+      keyed by URL host prefix AND purl type.
+- [ ] Shared HTTP client: 10 s connect, 30 s total timeout, 1 MiB
+      response cap (read via `io.LimitReader`), `Accept:
+      application/json`, User-Agent `bomtique/<version>
+      (+https://github.com/interlynk-io/bomtique)`. No retries in v1.
+- [ ] `--offline` flag on `add` and `update` forces the skeleton path
+      and MUST NOT open a socket (enforced by a test that fails the
+      build if any outbound connection attempt happens under
+      `--offline`).
+- [ ] `--online` forces a fetch attempt and errors if the input isn't
+      fetchable by any registered importer. Default behaviour:
+      auto-fetch when input matches a registered importer; otherwise
+      skeleton.
+- [ ] All outbound HTTP routed through the shared client so tests stub
+      it via `httptest.Server` + per-importer env var base-URL
+      override (`BOMTIQUE_GITHUB_BASE_URL`, etc., undocumented public
+      surface — testing hook only).
+- [ ] Structured errors: `ErrNetwork`, `ErrNotFound`,
+      `ErrRateLimited`, `ErrUnsupportedRef`, `ErrResponseTooLarge`.
+- [ ] Consumer-path network invariant enforced: a test greps for
+      `net/http` / `net.Dial` imports outside `internal/regfetch` and
+      `cmd/bomtique`. Existing test binary override of
+      `net.DefaultResolver` / `http.DefaultTransport` extended to
+      allow `regfetch` through in importer tests only.
+- [ ] `add` and `update` compose: importer produces a Component,
+      flag overrides layer on top via M14.0's `MergeComponent`.
+
+### M14.8 — GitHub importer
+
+- [ ] Recognises:
+      - `https://github.com/<owner>/<repo>`
+      - `https://github.com/<owner>/<repo>/tree/<ref>`
+      - `https://github.com/<owner>/<repo>/releases/tag/<ref>`
+      - `pkg:github/<owner>/<repo>[@<ref>]`
+- [ ] `GET https://api.github.com/repos/<owner>/<repo>` for repo
+      metadata: name, description, homepage, `license.spdx_id`,
+      `html_url`.
+- [ ] When `<ref>` supplied: second `GET
+      .../releases/tags/<ref>` (else `.../git/ref/tags/<ref>`) to
+      confirm; absent ref falls back to default branch as `version`
+      with a stderr warning suggesting the user pin.
+- [ ] Extracted fields: `name` = repo name; `version` = ref;
+      `license` = SPDX ID; `description`; `purl` =
+      `pkg:github/<owner>/<repo>@<ref>`; `external_references` with
+      website / vcs / issue-tracker entries.
+- [ ] `GITHUB_TOKEN` env var, when set, used as
+      `Authorization: Bearer`. Never logged; verbose output scrubs it.
+- [ ] 404 → `ErrNotFound` with "did you typo owner/repo?" hint.
+- [ ] 403 with `X-RateLimit-Remaining: 0` → `ErrRateLimited`
+      mentioning `GITHUB_TOKEN`.
+- [ ] Tests via `httptest.Server`: happy path, 404, rate-limit,
+      missing license (API returns `license: null`), default-branch
+      fallback, scrubbing of `GITHUB_TOKEN` from verbose output.
+
+### M14.9 — GitLab importer
+
+- [ ] Recognises `https://gitlab.com/<group>/.../<repo>[/-/tree/<ref>]`
+      and `pkg:gitlab/<namespace>/<project>[@<ref>]`.
+- [ ] GitLab API v4: `GET /api/v4/projects/<url-encoded-path>` for
+      metadata; `/repository/tags/<ref>` for version confirmation.
+- [ ] Self-hosted support: `--gitlab-base-url <host>` flag AND
+      `BOMTIQUE_GITLAB_BASE_URL` env var override the host.
+- [ ] Extracted fields mirror GitHub; purl type `pkg:gitlab/...`.
+- [ ] `GITLAB_TOKEN` env var → `PRIVATE-TOKEN` header when set.
+      Never logged.
+- [ ] Tests via httptest: happy path; self-hosted URL; 404;
+      rate-limit; token scrubbing.
+
+### M14.10 — npm importer
+
+- [ ] Recognises:
+      - `https://www.npmjs.com/package/<name>`
+      - `https://www.npmjs.com/package/<name>/v/<version>`
+      - `npm:<name>[@<version>]`
+      - `pkg:npm/<name>[@<version>]`
+      - Scoped names `@scope/name` handled in URL escaping AND purl
+        namespace.
+- [ ] `GET https://registry.npmjs.org/<encoded-name>` for metadata; no
+      version specified → `dist-tags.latest`.
+- [ ] Extracted fields: `name`, `version`, `license` (SPDX string from
+      `license`), `description`, `purl`, `supplier` from `author`
+      object (`{ name, email, url }`), `external_references` from
+      `homepage`, `repository.url`, `bugs.url`.
+- [ ] Integrity: when `dist.integrity` present (SRI format
+      `sha512-<base64>`), decode to bytes and emit a literal-form hash
+      entry `{ algorithm: "SHA-512", value: <lowercase-hex> }` per
+      §8.1.
+- [ ] Tests via httptest: unscoped; scoped; no-version → latest;
+      integrity-hash decode; 404; non-SPDX license string falls through
+      with warning.
+
+### M14.11 — PyPI importer
+
+- [ ] Recognises `https://pypi.org/project/<name>[/<version>]`,
+      `pypi:<name>[@<version>]`, `pkg:pypi/<name>[@<version>]`.
+- [ ] `GET https://pypi.org/pypi/<name>/json` or
+      `/pypi/<name>/<version>/json`.
+- [ ] Extracted fields: `name` (PEP 503 normalised: lowercased,
+      runs of `[-_.]+` collapsed to `-`), `version`, `license` best-
+      effort from `info.license` (if not a recognised SPDX ID, warn
+      and leave empty, telling the user to pass `--license`),
+      `description` = `info.summary`, `purl`, `supplier` from
+      `info.author` / `info.author_email`, `external_references` from
+      `info.home_page` / `info.project_urls["Source"]` /
+      `info.project_urls["Bug Tracker"]`.
+- [ ] When a version is pinned, emit per-release SHA-256 as a literal
+      hash entry using the sdist (or first wheel) digest from
+      `releases[version][i].digests.sha256`.
+- [ ] Tests via httptest: specific version; latest; missing license;
+      PEP 503 name normalisation; `digests.sha256` populated.
+
+### M14.12 — Cargo importer
+
+- [ ] Recognises `https://crates.io/crates/<name>[/<version>]` and
+      `pkg:cargo/<name>[@<version>]`.
+- [ ] `GET https://crates.io/api/v1/crates/<name>` for crate
+      metadata; `/crates/<name>/<version>` for version-specific info.
+- [ ] Extracted fields: `name`, `version`, `license` (SPDX),
+      `description`, `purl`, `external_references` from `homepage`,
+      `repository`, `documentation`.
+- [ ] Per-version SHA-256 checksum → literal hash entry.
+- [ ] User-Agent MUST identify bomtique with a contact URL per
+      crates.io ToS; the default UA from M14.7 satisfies this —
+      verified by a test asserting the header shape.
+- [ ] Tests via httptest: happy path; version pinning; UA assertion.
+
+### M14.13 — Docs, conformance, release
+
+- [ ] `docs/usage.md`: add sections for `manifest init`,
+      `manifest add`, `manifest remove`, `manifest update`,
+      `manifest patch`; examples for each importer; network policy
+      recap (`--offline`, `--online`, token env vars, 1 MiB response
+      cap, no retries).
+- [ ] `docs/security.md`: add an "importer network model" section
+      documenting the allowed hosts per importer, the response cap,
+      token handling and scrubbing, and the opt-in/opt-out flag shape.
+- [ ] `docs/discovery.md`: note that mutation commands reuse the same
+      walk semantics as `scan`/`validate` (same `.git`/`node_modules`/
+      etc. exclusions).
+- [ ] Conformance fixtures under `cmd/bomtique/testdata/manifest/`:
+      one directory per subcommand, with input tree + stdin + golden
+      output tree. `TestConformance_Determinism`-style rerun proves
+      byte-stable output.
+- [ ] `CHANGELOG.md`: v0.2.0 entry covering M14.0–M14.12.
+- [ ] Dogfood: regenerate `.primary.json` + every `.components.json`
+      entry via `manifest init` + `manifest add` against a throwaway
+      dir, byte-compare against the committed files to prove
+      round-trip stability.
+
+### M14 cross-cutting invariants (asserted in tests)
+
+- **No git clone, no tarball fetch, no archive extraction.** Mutation
+  commands read local files and/or registry JSON metadata endpoints
+  only. Enforced by the `internal/regfetch` package boundary and an
+  import-path lint.
+- **Consumer path stays network-free.** `scan`, `validate`, and the
+  emitters still cannot open sockets. Only `cmd/bomtique` (for
+  command wiring) and `internal/regfetch` import `net/http`.
+- **Secrets never logged.** `GITHUB_TOKEN`, `GITLAB_TOKEN`, and any
+  future token env var are read once and held in the client; verbose
+  mode scrubs them from request dumps. Tested per importer.
+- **Deterministic writes.** Same inputs → byte-identical file.
+  Unknown-field preservation is byte-stable once formatting converges
+  to the 2-space pretty-print baseline.
+- **Formatting expectation.** PR 1 reformats to 2-space indent on
+  first mutation. Minimal-diff writer deferred.
+
+### M14 open questions to resolve during M14.0
+
+- Formatting preservation policy: 2-space pretty-print (simple,
+  documented reformat on first mutation) vs. minimal-diff writer
+  preserving authorial whitespace. Recommendation: 2-space first,
+  revisit after user feedback.
+- Post-mutation validation scope: standalone-validate the new
+  Component only, or run full `validate.ProcessingSet`?
+  Recommendation: standalone only, user runs `bomtique validate`
+  separately.
+- `--interactive` walkthrough for `init` / `add`: deferred out of
+  M14; revisit based on user feedback.
+
 ## Cross-cutting invariants (asserted in tests, not just code)
 
 - **Byte-identical determinism** under `SOURCE_DATE_EPOCH` — tested per emitter.
 - **No network** at runtime — `net.DefaultResolver`/`http.DefaultTransport`
   overridden to fail in the test binary; any attempted fetch crashes tests.
+  Exception: `internal/regfetch` (M14.7) for mutation commands only.
 - **No symlink follow** by default — enforced by `internal/safefs`, never
   bypassed elsewhere.
 - **Warning channel is stderr, prefix `warning:`** — a single `diag` package

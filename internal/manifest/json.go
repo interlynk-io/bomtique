@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"unicode/utf8"
 )
 
@@ -183,7 +184,11 @@ func (p *PrimaryManifest) UnmarshalJSON(data []byte) error {
 
 func (p PrimaryManifest) MarshalJSON() ([]byte, error) {
 	type primaryAlias PrimaryManifest
-	return json.Marshal(primaryAlias(p))
+	base, err := json.Marshal(primaryAlias(p))
+	if err != nil {
+		return nil, err
+	}
+	return appendUnknowns(base, p.Unknown)
 }
 
 func (c *ComponentsManifest) UnmarshalJSON(data []byte) error {
@@ -204,7 +209,11 @@ func (c *ComponentsManifest) UnmarshalJSON(data []byte) error {
 
 func (c ComponentsManifest) MarshalJSON() ([]byte, error) {
 	type componentsAlias ComponentsManifest
-	return json.Marshal(componentsAlias(c))
+	base, err := json.Marshal(componentsAlias(c))
+	if err != nil {
+		return nil, err
+	}
+	return appendUnknowns(base, c.Unknown)
 }
 
 func (c *Component) UnmarshalJSON(data []byte) error {
@@ -225,7 +234,51 @@ func (c *Component) UnmarshalJSON(data []byte) error {
 
 func (c Component) MarshalJSON() ([]byte, error) {
 	type componentAlias Component
-	return json.Marshal(componentAlias(c))
+	base, err := json.Marshal(componentAlias(c))
+	if err != nil {
+		return nil, err
+	}
+	return appendUnknowns(base, c.Unknown)
+}
+
+// appendUnknowns splices the entries of `unknown` into the trailing
+// position of a compact JSON object `base`, in sorted key order. It is
+// used by the custom MarshalJSON methods on the three manifest types
+// that carry an Unknown sidecar map (§5.1, §5.2, §6.2). Base is expected
+// to be the default json.Marshal output of a Go struct, so it always
+// starts with '{' and ends with '}'.
+func appendUnknowns(base []byte, unknown map[string]json.RawMessage) ([]byte, error) {
+	if len(unknown) == 0 {
+		return base, nil
+	}
+	if len(base) < 2 || base[0] != '{' || base[len(base)-1] != '}' {
+		return nil, fmt.Errorf("appendUnknowns: unexpected base marshal shape")
+	}
+	keys := make([]string, 0, len(unknown))
+	for k := range unknown {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var buf bytes.Buffer
+	buf.Grow(len(base) + 64)
+	buf.Write(base[:len(base)-1])
+	first := len(base) == 2 // base == "{}"
+	for _, k := range keys {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		kjson, err := json.Marshal(k)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(kjson)
+		buf.WriteByte(':')
+		buf.Write(unknown[k])
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
 }
 
 // License accepts either a bare string (shorthand for `{"expression": "<str>"}`)
@@ -310,7 +363,16 @@ func extractUnknown(raw map[string]json.RawMessage, known map[string]struct{}) m
 		if out == nil {
 			out = make(map[string]json.RawMessage)
 		}
-		out[k] = v
+		// Store unknown values in compact form so the map is stable
+		// across round-trips: json.Indent reflows whitespace inside
+		// spliced RawMessage values when WriteJSON pretty-prints, and
+		// canonicalising here means a second parse sees the same bytes.
+		var buf bytes.Buffer
+		if err := json.Compact(&buf, v); err == nil {
+			out[k] = json.RawMessage(buf.Bytes())
+		} else {
+			out[k] = v
+		}
 	}
 	return out
 }
