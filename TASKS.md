@@ -204,21 +204,44 @@ section a task implements.
 
 ## M7 — CycloneDX emitter (`internal/emit/cyclonedx`)
 
-- [ ] Hand-rolled writer targeting CycloneDX 1.7 JSON. Struct-per-field; no
-      map-based emission so field ordering is stable.
-- [ ] `metadata.component` ← primary; `components[]` ← reachable pool [§14.1].
-- [ ] Field mapping table in §14.1 implemented end-to-end, including:
-  - `license` → `licenses[]`: expression form when compound; per-license
-    `{ license: { id, text? } }` entries for `texts[]` (text attachment for
-    inline, read-and-embed-as-attachment for `file`).
-  - `pedigree` including `patches[].diff` attachment rules [§9.2]:
-    string-form `text` → `{content, contentType: "text/plain"}`; attachment-form
-    preserved; local `url` → read file, base64, emit `{content, encoding: "base64"}`;
-    http(s) `url` → keep as-is, no fetch.
-  - `scope` omitted on primary; `tags` never serialized.
-  - `dependencies[]` computed from primary + each pool component's `depends-on`.
+- [x] Hand-rolled CycloneDX 1.7 writer in struct-per-field form
+      (`internal/emit/cyclonedx/types.go`). No map-based emission —
+      `json.Marshal` walks structs in declaration order so the serialised
+      output is byte-stable across runs.
+- [x] `metadata.component` ← primary; `components[]` ← reachable pool;
+      emitter takes the pool + per-manifest directories via
+      `EmitInput.Reachable` so path-bearing fields resolve against the
+      source manifest (§12.4).
+- [x] Field mapping table in §14.1 implemented end-to-end:
+  - [x] `license` → `licenses[]`: a single `{ expression }` entry always
+        when non-empty, plus one `{ license: { id, text } }` per
+        `texts[]`. Inline `text` → `{ content, contentType: "text/plain" }`;
+        `file` → read via safefs, base64-encode, emit
+        `{ content, encoding: "base64", contentType: "text/plain" }`.
+  - [x] `hashes`: literal pass-through; file-form computed via
+        `internal/hash.File`; path-form via `internal/hash.Directory`
+        (handles §8.3 regular-file fallback). Algorithm names translated
+        to CycloneDX form (`SHA-3-256` → `SHA3-256`).
+  - [x] `pedigree` including `patches[].diff` per §9.2: string-form text
+        → `{content, contentType: "text/plain"}`; attachment-form preserved
+        field-by-field; local `url` → read via safefs, base64, emit
+        `text = {content, encoding: "base64"}`, url field dropped as
+        consumed; http(s) url → preserved verbatim, no fetch.
+  - [x] `scope` omitted on primary (§5.3); `tags` never serialized (§14.1).
+  - [x] `dependencies[]` computed from primary + each reachable pool
+        component's `depends-on`. Ref resolution via `graph.ParseRef` +
+        both canonical-purl and (name, version) lookup tables over the
+        reachable set. Unresolved edges are silently dropped — M6's
+        §10.3 warnings have already fired.
+  - [x] `metadata.lifecycles` defaults to `[{phase: "build"}]` when the
+        primary omits it, per §7.5.
+  - [x] `bom-ref` derivation per §15.1 precedence: explicit → canonical
+        purl → `pkg:generic/<pct-name>@<version>` RFC 3986 §2.3
+        unreserved; `@version` dropped when absent; collisions rejected
+        hard via `assignBOMRefs`.
 - [ ] Self-validate emitted JSON against a bundled copy of the CycloneDX 1.7
-      schema when `--validate-output` is passed (fetched once, vendored).
+      schema when `--validate-output` is passed (deferred — schema vendor
+      lands with M9's CLI flag).
 
 ## M8 — Determinism (`internal/emit/cyclonedx` + `internal/jcs`)
 
