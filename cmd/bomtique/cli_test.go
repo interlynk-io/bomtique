@@ -97,6 +97,41 @@ func TestValidate_MissingFileExitsIOError(t *testing.T) {
 	}
 }
 
+func TestValidate_VerboseLogsParsedFiles(t *testing.T) {
+	// A directory with one parseable manifest + one no-marker file
+	// both triggers the "parsed" and "skipped" verbose lines.
+	dir := t.TempDir()
+	primary := `{"schema":"primary-manifest/v1","primary":{"name":"app","version":"1"}}`
+	if err := os.WriteFile(filepath.Join(dir, ".primary.json"), []byte(primary), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	// Name matches discovery but content lacks a schema marker.
+	if err := os.WriteFile(filepath.Join(dir, ".components.json"), []byte(`{"just":"junk"}`), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	_, stderr, err := withArgs(t, "validate", dir, "--verbose")
+	if code := exitCodeOf(err); code != exitOK {
+		t.Fatalf("exit: got %d, want 0; err=%v", code, err)
+	}
+	s := stderr.String()
+	if !strings.Contains(s, "parsed ") || !strings.Contains(s, ".primary.json (primary/json)") {
+		t.Fatalf("expected 'parsed ...' line, stderr was:\n%s", s)
+	}
+	if !strings.Contains(s, "skipped ") || !strings.Contains(s, "no schema marker") {
+		t.Fatalf("expected 'skipped ... no schema marker' line, stderr was:\n%s", s)
+	}
+
+	// Without --verbose, neither line appears.
+	_, stderrQuiet, err := withArgs(t, "validate", dir)
+	if code := exitCodeOf(err); code != exitOK {
+		t.Fatalf("quiet exit: got %d, err=%v", code, err)
+	}
+	if strings.Contains(stderrQuiet.String(), "parsed ") {
+		t.Fatalf("quiet run leaked verbose output:\n%s", stderrQuiet.String())
+	}
+}
+
 func TestValidate_NoArgsTriggersDiscovery(t *testing.T) {
 	// M11: zero-arg `validate` walks the CWD for discoverable manifests.
 	// We stage a tiny tree, chdir into it, and check that discovery

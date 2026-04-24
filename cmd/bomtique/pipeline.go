@@ -6,6 +6,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -26,7 +27,14 @@ import (
 // regardless of whether they were found via discovery or supplied
 // explicitly. Any other parse error bubbles up so the CLI can map it
 // to an exit code.
-func readManifests(args []string) ([]*manifest.Manifest, error) {
+//
+// `trace` receives one line per path: "parsed <path> (<kind>/<format>)"
+// for successful parses and "skipped <path> (no schema marker)" for
+// §12.5 drops. Pass io.Discard to silence the trace.
+func readManifests(args []string, trace io.Writer) ([]*manifest.Manifest, error) {
+	if trace == nil {
+		trace = io.Discard
+	}
 	paths, err := resolveArgs(args)
 	if err != nil {
 		return nil, err
@@ -38,10 +46,12 @@ func readManifests(args []string) ([]*manifest.Manifest, error) {
 			if errors.Is(err, manifest.ErrNoSchemaMarker) {
 				// §12.5: a file without a schema marker MUST be
 				// ignored silently.
+				_, _ = fmt.Fprintln(trace, "skipped", path, "(no schema marker)")
 				continue
 			}
 			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
+		_, _ = fmt.Fprintf(trace, "parsed %s (%s/%s)\n", path, m.Kind, m.Format)
 		out = append(out, m)
 	}
 	return out, nil
@@ -110,6 +120,16 @@ func discoveryFilenamesForMessage() string {
 	// Two adjacent calls return the same string; the map has a fixed
 	// three-entry set whose order we pin manually for determinism.
 	return ".primary.json, .components.json, .components.csv"
+}
+
+// verboseWriter returns `stderr` when `on`, or io.Discard otherwise.
+// Lets a caller pass the trace writer straight into readManifests
+// without branching at every callsite.
+func verboseWriter(stderr io.Writer, on bool) io.Writer {
+	if on {
+		return stderr
+	}
+	return io.Discard
 }
 
 // partitionedSet separates parsed manifests by kind. This is the

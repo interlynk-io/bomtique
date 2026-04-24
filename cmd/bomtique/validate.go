@@ -32,7 +32,7 @@ Exit code 0 on success, 1 on any validation error, 2 on usage error.`,
 func runValidate(stderr io.Writer, f *commonFlags, args []string) error {
 	diag.Reset()
 
-	manifests, err := readManifests(args)
+	manifests, err := readManifests(args, verboseWriter(stderr, f.Verbose))
 	if err != nil {
 		return newExitErr(exitIOError, err)
 	}

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -156,7 +157,7 @@ func TestReadManifests_DirectoryDiscoversAndSkipsNoMarker(t *testing.T) {
 		t.Fatalf("overwrite: %v", err)
 	}
 
-	ms, err := readManifests([]string{root})
+	ms, err := readManifests([]string{root}, io.Discard)
 	if err != nil {
 		t.Fatalf("readManifests: %v", err)
 	}
