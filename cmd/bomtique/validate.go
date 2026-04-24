@@ -49,5 +49,9 @@ func runValidate(stderr io.Writer, f *commonFlags, args []string) error {
 		return newExitErr(exitWarningsError,
 			fmt.Errorf("--warnings-as-errors: %d warning(s) emitted", diag.Count()))
 	}
+
+	ps := partition(manifests)
+	_, _ = fmt.Fprintf(stderr, "ok: %d manifest(s) validated (%d primary, %d components)\n",
+		len(manifests), len(ps.Primaries), len(ps.Components))
 	return nil
 }

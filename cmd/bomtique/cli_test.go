@@ -67,9 +67,31 @@ func exitCodeOf(err error) int {
 
 func TestValidate_CleanAppendixExampleExitsZero(t *testing.T) {
 	path := filepath.Join("..", "..", "internal", "manifest", "testdata", "appendix", "b1.json")
-	_, _, err := withArgs(t, "validate", path)
+	_, stderr, err := withArgs(t, "validate", path)
 	if got := exitCodeOf(err); got != exitOK {
 		t.Fatalf("exit code: got %d, want 0; err=%v", got, err)
+	}
+	// Success prints a one-line summary; check the shape so a silent
+	// regression won't sneak by.
+	s := stderr.String()
+	if !strings.Contains(s, "ok:") || !strings.Contains(s, "1 manifest(s) validated") {
+		t.Fatalf("expected success summary on stderr, got:\n%s", s)
+	}
+}
+
+func TestValidate_FailureDoesNotPrintOK(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad.json")
+	bad := `{"schema":"primary-manifest/v1","primary":{"name":"","version":"1"}}`
+	if err := os.WriteFile(path, []byte(bad), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, stderr, err := withArgs(t, "validate", path)
+	if code := exitCodeOf(err); code != exitValidationError {
+		t.Fatalf("exit: got %d, want 1", code)
+	}
+	if strings.Contains(stderr.String(), "ok:") {
+		t.Fatalf("failed validation should not print 'ok:':\n%s", stderr.String())
 	}
 }
 
