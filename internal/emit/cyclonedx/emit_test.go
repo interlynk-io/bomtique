@@ -365,29 +365,38 @@ func TestEmit_DependenciesLinkPrimaryToPool(t *testing.T) {
 	if len(deps) != 3 {
 		t.Fatalf("dependencies: got %d, want 3 (primary + 2 pool)", len(deps))
 	}
-	// Primary depends on libfoo.
-	primaryDep := deps[0].(map[string]any)
-	if primaryDep["ref"] != "pkg:generic/app@1" {
-		t.Fatalf("primary ref: got %v", primaryDep["ref"])
+
+	// §15.2 sorts dependencies[] by ref; look up entries by ref rather
+	// than assuming positional order.
+	byRef := make(map[string]map[string]any, len(deps))
+	for _, d := range deps {
+		m := d.(map[string]any)
+		byRef[m["ref"].(string)] = m
 	}
-	list := primaryDep["dependsOn"].([]any)
-	if len(list) != 1 || list[0] != "pkg:generic/libfoo@1" {
-		t.Fatalf("primary dependsOn: got %v", list)
+
+	primaryDep, ok := byRef["pkg:generic/app@1"]
+	if !ok {
+		t.Fatalf("no primary dep entry in %v", byRef)
 	}
-	// libfoo depends on libbar.
-	libfooDep := deps[1].(map[string]any)
-	if libfooDep["ref"] != "pkg:generic/libfoo@1" {
-		t.Fatalf("libfoo ref: got %v", libfooDep["ref"])
+	plist := primaryDep["dependsOn"].([]any)
+	if len(plist) != 1 || plist[0] != "pkg:generic/libfoo@1" {
+		t.Fatalf("primary dependsOn: got %v", plist)
+	}
+
+	libfooDep, ok := byRef["pkg:generic/libfoo@1"]
+	if !ok {
+		t.Fatalf("no libfoo dep entry in %v", byRef)
 	}
 	libfooList := libfooDep["dependsOn"].([]any)
 	if len(libfooList) != 1 {
 		t.Fatalf("libfoo dependsOn: got %v", libfooList)
 	}
-	// The libbar bom-ref came from §15.1's fallback since libbar has no
-	// explicit bom-ref or purl.  It must match libbar's own dependency entry.
 	libbarRef := libfooList[0].(string)
 	if !strings.HasPrefix(libbarRef, "pkg:generic/libbar") {
 		t.Fatalf("libbar derived bom-ref unexpected: %v", libbarRef)
+	}
+	if _, ok := byRef[libbarRef]; !ok {
+		t.Fatalf("libbar ref %q is missing its own dependencies entry", libbarRef)
 	}
 }
 

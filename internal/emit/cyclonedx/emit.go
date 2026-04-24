@@ -31,7 +31,8 @@ type EmitInput struct {
 }
 
 // Options controls emitter behaviour. The zero value — 10 MiB cap, no
-// pretty indent — matches the CI-friendly default.
+// pretty indent, SOURCE_DATE_EPOCH resolved from the environment —
+// matches the CI-friendly default.
 type Options struct {
 	// MaxFileSize is the per-read cap enforced by safefs.Open when the
 	// emitter needs to embed file contents (license texts, patch
@@ -40,27 +41,42 @@ type Options struct {
 
 	// Indent, when non-zero, switches from compact json.Marshal output
 	// to indented json.MarshalIndent with two-space indentation. The
-	// canonical form (for the M8 determinism harness) will use JCS
-	// canonicalisation instead; Indent is for human readers only.
+	// byte-identical determinism guarantee of §15 still holds across
+	// two runs with the same Indent setting, but mixing indent modes
+	// is of course not byte-identical.
 	Indent bool
 
-	// SourceDateEpoch, when non-nil, overrides the emission timestamp.
-	// M8 will wire this to the `SOURCE_DATE_EPOCH` env. For M7 the
-	// emitter leaves timestamp empty unless the caller sets it here.
-	SourceDateEpoch *string
+	// SourceDateEpoch overrides the `SOURCE_DATE_EPOCH` env variable.
+	// When non-nil, the emitter sets `metadata.timestamp` to the ISO
+	// 8601 UTC form of this epoch and derives `serialNumber` as a
+	// UUIDv5 over the JCS-canonicalised `components[]` array. When
+	// nil and the env var is set, the same treatment applies with the
+	// env value; otherwise no timestamp is emitted and the serial
+	// number is a UUIDv4 (random).
+	SourceDateEpoch *int64
 }
 
-// Emit produces the CycloneDX 1.7 JSON bytes for one primary.
-// Determinism-critical details (sorting, UUIDv5 serial, canonical
-// encoding) land in M8; this pass produces a conforming-shape document
-// whose field ordering is stable because every struct is fully
-// modelled.
+// Emit produces the CycloneDX 1.7 JSON bytes for one primary. The
+// output is byte-identical across runs when:
+//
+//   - the inputs are unchanged;
+//   - SOURCE_DATE_EPOCH (or Options.SourceDateEpoch) is set;
+//   - referenced files haven't changed on disk (§15.4).
+//
+// Field ordering is stable because every type is a struct-per-field;
+// array ordering follows §15.2; the serialNumber derives from the
+// JCS-canonicalised components array per §15.3.
 func Emit(in EmitInput, opts Options) ([]byte, error) {
 	if in.Primary == nil {
 		return nil, fmt.Errorf("cyclonedx: nil primary")
 	}
 	if opts.MaxFileSize <= 0 {
 		opts.MaxFileSize = safefs.DefaultMaxFileSize
+	}
+
+	epoch, err := resolveSourceDateEpoch(opts)
+	if err != nil {
+		return nil, err
 	}
 
 	// Assign bom-refs up-front so dependency resolution below can
@@ -94,7 +110,6 @@ func Emit(in EmitInput, opts Options) ([]byte, error) {
 		SpecVersion: specVersion,
 		Version:     1,
 		Metadata: &cdxMetadata{
-			Timestamp:  timestampFromOpts(opts),
 			Component:  &primary,
 			Lifecycles: buildLifecycles(in.Primary.Lifecycles),
 		},
@@ -102,20 +117,24 @@ func Emit(in EmitInput, opts Options) ([]byte, error) {
 		Dependencies: deps,
 	}
 
+	// §15.2: sort components, dependencies, and nested arrays. Done
+	// before timestamp / serial so the JCS digest sees the final
+	// components[] order.
+	sortBOM(&bom)
+
+	if epoch != nil {
+		bom.Metadata.Timestamp = formatTimestamp(*epoch)
+		serial, err := computeDeterministicSerial(bom.Components)
+		if err != nil {
+			return nil, err
+		}
+		bom.SerialNumber = serial
+	}
+
 	if opts.Indent {
 		return json.MarshalIndent(bom, "", "  ")
 	}
 	return json.Marshal(bom)
-}
-
-// timestampFromOpts returns the emission timestamp.  In M7 we only
-// honour an explicitly-set override on Options; M8 will add
-// SOURCE_DATE_EPOCH env handling and ISO 8601 UTC-second formatting.
-func timestampFromOpts(opts Options) string {
-	if opts.SourceDateEpoch != nil {
-		return *opts.SourceDateEpoch
-	}
-	return ""
 }
 
 // buildLifecycles maps manifest Lifecycle entries onto the CycloneDX
