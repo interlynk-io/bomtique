@@ -5,13 +5,27 @@
     "version": "0.1.0",
     "type": "application",
     "description": "Reference consumer for the Component Manifest v1 specification",
-    "supplier": { "name": "Interlynk.io", "url": "https://interlynk.io" },
-    "license": "Apache-2.0",
+    "supplier": {
+      "name": "Interlynk.io",
+      "url": "https://interlynk.io"
+    },
+    "license": {
+      "expression": "Apache-2.0"
+    },
     "purl": "pkg:github/interlynk-io/bomtique@0.1.0",
     "external_references": [
-      { "type": "website", "url": "https://github.com/interlynk-io/bomtique" },
-      { "type": "vcs", "url": "https://github.com/interlynk-io/bomtique" },
-      { "type": "issue-tracker", "url": "https://github.com/interlynk-io/bomtique/issues" }
+      {
+        "type": "website",
+        "url": "https://github.com/interlynk-io/bomtique"
+      },
+      {
+        "type": "vcs",
+        "url": "https://github.com/interlynk-io/bomtique"
+      },
+      {
+        "type": "issue-tracker",
+        "url": "https://github.com/interlynk-io/bomtique/issues"
+      }
     ],
     "depends-on": [
       "pkg:golang/github.com/google/uuid@v1.6.0",

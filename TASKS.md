@@ -1049,13 +1049,14 @@ milestone.
       importers, network policy, and doc updates. Known deferred
       items remain listed in-line with their owning milestones
       (conformance expansion, importer-specific flags, etc.).
-- [ ] Dogfood: regenerate `.primary.json` + every
-      `.components.json` entry via `manifest init` + `manifest
-      add` against a throwaway dir, byte-compare against the
-      committed files to prove round-trip stability.  *Deferred:
-      the committed dogfood files pre-date the mutate canonical
-      writer and differ from it in whitespace; a follow-up will
-      regenerate them in a dedicated PR.*
+- [x] Dogfood regenerated: the committed root `.primary.json` and
+      `.components.json` now match the canonical mutate writer
+      output. `TestDogfood_RegenerateByteIdentical` in
+      `cmd/bomtique/` drives `manifest init` + six pool `add`s +
+      six primary `add --primary` and asserts byte equality
+      against the committed files. `sbom/bomtique-0.1.0.cdx.json`
+      and `sbom/bomtique-0.1.0.spdx.json` regenerated under
+      `SOURCE_DATE_EPOCH=1700000000` from the new manifests.
 
 ### M14 cross-cutting invariants (asserted in tests)
 
