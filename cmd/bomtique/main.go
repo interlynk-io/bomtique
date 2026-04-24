@@ -52,7 +52,7 @@ func newExitErr(code int, err error) *exitErr {
 func main() {
 	root := newRootCmd()
 	if err := root.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "error:", err)
 		var ee *exitErr
 		if errors.As(err, &ee) {
 			os.Exit(ee.code)

@@ -43,7 +43,7 @@ delimited JSON instead of writing files.`,
 			return runGenerate(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, args)
 		},
 	}
-	f.commonFlags.attach(cmd)
+	f.attach(cmd)
 	cmd.Flags().StringVarP(&f.OutDir, "out", "o", "./sbom", "output directory for per-primary SBOMs")
 	cmd.Flags().BoolVar(&f.Stdout, "stdout", false, "write NDJSON to stdout instead of files")
 	cmd.Flags().StringVar(&f.Format, "format", "cyclonedx", "output format (cyclonedx | spdx)")
@@ -59,11 +59,11 @@ func runGenerate(stdout, stderr io.Writer, f *generateFlags, args []string) erro
 		return newExitErr(exitUsageError, fmt.Errorf("unknown --format %q (valid: cyclonedx, spdx)", f.Format))
 	}
 	if f.FollowSymlinks {
-		fmt.Fprintln(stderr, "warning: --follow-symlinks is accepted but safefs has no opt-in path today; symlinks will still be refused")
+		_, _ = fmt.Fprintln(stderr, "warning: --follow-symlinks is accepted but safefs has no opt-in path today; symlinks will still be refused")
 		diag.Warn("--follow-symlinks requested but safefs opt-in is not yet wired — refusing symlinks as usual (§18.2)")
 	}
 	if f.OutputValidate {
-		fmt.Fprintln(stderr, "warning: --output-validate is accepted but no schema is bundled yet; skipping validation")
+		_, _ = fmt.Fprintln(stderr, "warning: --output-validate is accepted but no schema is bundled yet; skipping validation")
 	}
 
 	diag.Reset()
@@ -175,7 +175,7 @@ func emitOne(stdout, stderr io.Writer, f *generateFlags, pm *manifest.Manifest, 
 	if err := os.WriteFile(out, data, 0o644); err != nil {
 		return newExitErr(exitIOError, fmt.Errorf("write %s: %w", out, err))
 	}
-	fmt.Fprintln(stderr, "wrote", out)
+	_, _ = fmt.Fprintln(stderr, "wrote", out)
 	return nil
 }
 
@@ -214,6 +214,6 @@ func sanitizeFilename(s string) string {
 
 func printValidationErrors(stderr io.Writer, errs []validate.Error) {
 	for _, e := range errs {
-		fmt.Fprintln(stderr, "validation:", e.Error())
+		_, _ = fmt.Fprintln(stderr, "validation:", e.Error())
 	}
 }
