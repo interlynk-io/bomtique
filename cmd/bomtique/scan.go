@@ -39,18 +39,47 @@ func newScanCmd() *cobra.Command {
 		Use:   "scan [paths...]",
 		Short: "Scan Component Manifest v1 inputs and emit SBOMs",
 		Long: `scan parses every primary and components manifest from the paths supplied,
-builds the shared pool, resolves each primary's reachable closure, and emits one
-SBOM per primary. By default the SBOMs go to stdout as newline-delimited JSON
-(one compact JSON per line); pass --out <dir> to write per-primary files named
-<name>-<version>.cdx.json (or <name>.cdx.json when the primary carries no
-version).`,
+builds the shared pool, resolves each primary's reachable closure, and emits
+one SBOM per primary. With no paths, scan walks the current directory.
+
+Output:
+  default       newline-delimited JSON on stdout (one compact JSON per primary)
+  --out <dir>   one file per primary: <name>-<version>.cdx.json (CycloneDX) or
+                <name>-<version>.spdx.json (SPDX); missing version drops the
+                hyphen. Each written path is logged to stderr.
+
+Hashes are computed at scan time from on-disk bytes (spec §15.4):
+  * literal-form entries pass straight through.
+  * file-form entries read the referenced file (capped by --max-file-size).
+  * directory-form entries run the deterministic §8.4 walk — skip hidden
+    files, skip symlinks, apply the extensions filter, sort, digest.
+  Allowed algorithms: SHA-256, SHA-384, SHA-512, SHA-3-256, SHA-3-512.
+
+License texts with 'file' entries are read from disk at scan time and embedded
+as base64 attachments in CycloneDX output (same --max-file-size cap).
+
+Determinism: --source-date-epoch <n> (or SOURCE_DATE_EPOCH env) makes the
+emitted document reproducible — stable metadata.timestamp / creationInfo.created
+plus a UUIDv5 serial / documentNamespace derived from JCS-canonicalised
+components. Without it the timestamp is omitted and SPDX uses UUIDv4.
+
+Exit codes: see 'bomtique --help'.
+
+Examples:
+  bomtique scan                                  # walk CWD
+  bomtique scan ./my-service                     # walk a directory
+  bomtique scan .primary.json .components.json   # explicit files
+  bomtique scan --out ./out --format spdx        # SPDX files in ./out
+  SOURCE_DATE_EPOCH=1700000000 bomtique scan --out ./out --output-validate`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runScan(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, args)
 		},
 	}
 	f.attachEmit(cmd)
-	cmd.Flags().StringVarP(&f.OutDir, "out", "o", "", "write per-primary SBOMs into this directory instead of stdout")
-	cmd.Flags().StringVar(&f.Format, "format", "cyclonedx", "output format (cyclonedx | spdx)")
+	cmd.Flags().StringVarP(&f.OutDir, "out", "o", "",
+		"write per-primary SBOMs into this directory instead of stdout")
+	cmd.Flags().StringVar(&f.Format, "format", "cyclonedx",
+		"output format: cyclonedx | spdx")
 	return cmd
 }
 

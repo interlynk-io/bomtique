@@ -65,9 +65,33 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "bomtique",
-		Short:         "Hand-authored SBOM toolkit (Component Manifest v1 consumer)",
-		Long:          "bomtique reads Component Manifest v1 files and emits one CycloneDX (or SPDX) SBOM per primary manifest.",
+		Use:   "bomtique",
+		Short: "Hand-authored SBOM toolkit (Component Manifest v1 consumer)",
+		Long: `bomtique reads Component Manifest v1 files and emits one CycloneDX (or SPDX)
+SBOM per primary manifest.
+
+Typical flow:
+  bomtique manifest init --name <app> --version <ver>     scaffold .primary.json
+  bomtique manifest add  --name <lib> --version <ver>     append pool entries
+  bomtique validate                                       check without emitting
+  bomtique scan --out ./out                               emit one SBOM per primary
+
+File discovery: commands that take [paths...] walk each argument; directories
+are searched for files matching .primary.json, .components.json, and
+.components.csv. With no arguments, the current directory is walked.
+
+Component refs (accepted by 'manifest remove|update|patch'):
+  pkg:<type>/<name>[@<version>]         purl form (preferred)
+  <name>@<version>                      shorthand form
+
+Exit codes (shared by every subcommand):
+  0  success
+  1  validation / semantic error in a manifest
+  2  CLI usage error (unknown flag, invalid format, malformed value)
+  3  I/O error (missing file, read/write failure)
+  4  --warnings-as-errors triggered at least one warning
+
+Spec reference: see spec/component-manifest-v1.md for all § citations.`,
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,

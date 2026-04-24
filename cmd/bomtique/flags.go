@@ -26,13 +26,13 @@ type commonFlags struct {
 
 func (f *commonFlags) attach(cmd *cobra.Command) {
 	cmd.Flags().Int64Var(&f.MaxFileSize, "max-file-size", safefs.DefaultMaxFileSize,
-		"maximum bytes read from any single file referenced by a manifest (spec §8)")
+		"per-file byte cap for license texts, hashed files, and patch diffs (bytes)")
 	cmd.Flags().BoolVar(&f.WarningsAsErrors, "warnings-as-errors", false,
-		"treat any warning emitted during the run as an error (exit code 4)")
+		"exit with code 4 if any warning is emitted during the run")
 	cmd.Flags().BoolVar(&f.FollowSymlinks, "follow-symlinks", false,
-		"follow symlinks during filesystem reads (opt-in, outside spec §18.2)")
+		"accepted for forward compat; currently a no-op — symlinks are always refused")
 	cmd.Flags().BoolVar(&f.Verbose, "verbose", false,
-		"log each manifest file as it's parsed, plus silently-skipped paths (§12.5)")
+		"log each manifest parsed and each file silently skipped for lacking a schema marker")
 }
 
 // emitFlags layers scan-only flags on top of commonFlags. These
@@ -53,11 +53,11 @@ type emitFlags struct {
 func (f *emitFlags) attachEmit(cmd *cobra.Command) {
 	f.attach(cmd)
 	cmd.Flags().StringSliceVar(&f.Tags, "tag", nil,
-		"filter pool components to those whose tags include any listed value (§6.2)")
+		"keep only pool components whose 'tags' field contains any listed value (repeatable)")
 	cmd.Flags().Int64Var(&f.SourceDateEpoch, "source-date-epoch", 0,
-		"override the SOURCE_DATE_EPOCH environment variable (seconds since Unix epoch)")
+		"Unix epoch seconds for deterministic timestamps + serial; overrides SOURCE_DATE_EPOCH env")
 	cmd.Flags().BoolVar(&f.OutputValidate, "output-validate", false,
-		"validate emitted JSON against the vendored CycloneDX 1.7 or SPDX 2.3 schema")
+		"validate every emitted document against the vendored CycloneDX 1.7 or SPDX 2.3 schema")
 	cmd.PreRunE = chainPreRun(cmd.PreRunE, func(cmd *cobra.Command, _ []string) error {
 		f.SourceDateEpochSet = cmd.Flags().Changed("source-date-epoch")
 		return nil
