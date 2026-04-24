@@ -93,7 +93,7 @@ func Emit(in EmitInput, opts Options) ([]byte, error) {
 		packages = append(packages, pkg)
 	}
 
-	if in.Primary.Lifecycles != nil && len(in.Primary.Lifecycles) > 0 {
+	if len(in.Primary.Lifecycles) > 0 {
 		drops.lifecycles()
 	}
 
