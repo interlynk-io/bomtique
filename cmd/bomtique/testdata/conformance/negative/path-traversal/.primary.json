@@ -1,0 +1,10 @@
+{
+  "schema": "primary-manifest/v1",
+  "primary": {
+    "name": "bad-traversal",
+    "version": "1.0.0",
+    "hashes": [
+      { "algorithm": "SHA-256", "file": "../../escape.txt" }
+    ]
+  }
+}

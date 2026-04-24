@@ -1,0 +1,8 @@
+{
+  "schema": "primary-manifest/v1",
+  "primary": {
+    "name": "bad-purl",
+    "version": "1.0.0",
+    "purl": "not-a-purl-at-all"
+  }
+}

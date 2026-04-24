@@ -1,0 +1,13 @@
+{
+  "schema": "primary-manifest/v1",
+  "primary": {
+    "name": "acme-worker",
+    "version": "1.0.0",
+    "type": "application",
+    "purl": "pkg:generic/acme/acme-worker@1.0.0",
+    "license": "Apache-2.0",
+    "depends-on": [
+      "pkg:generic/openbsd/libtls@3.9.0"
+    ]
+  }
+}

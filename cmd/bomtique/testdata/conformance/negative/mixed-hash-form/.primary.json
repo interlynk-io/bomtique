@@ -1,0 +1,14 @@
+{
+  "schema": "primary-manifest/v1",
+  "primary": {
+    "name": "bad-hash",
+    "version": "1.0.0",
+    "hashes": [
+      {
+        "algorithm": "SHA-256",
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "file": "./parser.c"
+      }
+    ]
+  }
+}
