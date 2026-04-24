@@ -1,0 +1,18 @@
+{
+  "schema": "component-manifest/v1",
+  "components": [
+    {
+      "bom-ref": "pkg:github/python/pythoncapi-compat",
+      "name": "pythoncapi_compat",
+      "type": "library",
+      "description": "Rolling backport header for new CPython C-API functions",
+      "license": "MIT-0",
+      "hashes": [
+        { "algorithm": "SHA-256", "file": "./src/thirdparty/pythoncapi_compat.h" }
+      ],
+      "external_references": [
+        { "type": "vcs", "url": "https://github.com/python/pythoncapi-compat" }
+      ]
+    }
+  ]
+}

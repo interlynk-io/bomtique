@@ -1,0 +1,4 @@
+#component-manifest/v1
+name,version,type,description,supplier_name,supplier_email,license,purl,cpe,hash_algorithm,hash_value,hash_file,scope,depends_on,tags
+libmqtt,4.3.0,library,Acme MQTT client,Acme Corp,,EPL-2.0,pkg:generic/acme/libmqtt@4.3.0,,SHA-256,9f86d08...,,required,libtls@3.9.0,"core,networking"
+libtls,3.9.0,library,OpenBSD TLS,OpenBSD,,ISC,pkg:generic/openbsd/libtls@3.9.0,,SHA-256,e3b0c44...,,required,,"core,networking"

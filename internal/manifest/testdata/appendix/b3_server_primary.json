@@ -1,0 +1,14 @@
+{
+  "schema": "primary-manifest/v1",
+  "primary": {
+    "name": "acme-server",
+    "version": "1.0.0",
+    "type": "application",
+    "purl": "pkg:generic/acme/acme-server@1.0.0",
+    "license": "Apache-2.0",
+    "depends-on": [
+      "pkg:generic/acme/libmqtt@4.3.0",
+      "pkg:generic/openbsd/libtls@3.9.0"
+    ]
+  }
+}
