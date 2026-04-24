@@ -59,7 +59,7 @@ func simpleComponent(name, version string) manifest.Component {
 // expectKindReturning instead.
 func expectKind(t *testing.T, errs []validate.Error, k validate.Kind) {
 	t.Helper()
-	expectKindReturning(t, errs, k)
+	_ = expectKindReturning(t, errs, k)
 }
 
 func expectKindReturning(t *testing.T, errs []validate.Error, k validate.Kind) validate.Error {
