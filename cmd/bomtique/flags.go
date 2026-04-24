@@ -9,17 +9,18 @@ import (
 	"github.com/interlynk-io/bomtique/internal/safefs"
 )
 
-// commonFlags is the flag bundle shared between `generate` and
-// `validate`. Both commands need filesystem cap + warnings plumbing;
-// `generate` layers on output controls in generateFlags.
+// commonFlags is the flag bundle genuinely shared between `generate`
+// and `validate`. Both commands do filesystem reads (for hash targets,
+// license texts, patch diffs) and both route warnings through the
+// same diag channel.
+//
+// Anything that only matters for SBOM emission — tag filtering,
+// deterministic timestamps, post-emit schema validation — lives on
+// generateFlags instead. Help output stays tight.
 type commonFlags struct {
-	MaxFileSize        int64
-	WarningsAsErrors   bool
-	FollowSymlinks     bool // M9: accepted but not yet wired — safefs always refuses symlinks today
-	OutputValidate     bool // M9: accepted but no-op — schema vendor deferred
-	Tags               []string
-	SourceDateEpochSet bool
-	SourceDateEpoch    int64
+	MaxFileSize      int64
+	WarningsAsErrors bool
+	FollowSymlinks   bool // accepted but not yet wired — safefs always refuses symlinks today
 }
 
 func (f *commonFlags) attach(cmd *cobra.Command) {
@@ -29,12 +30,31 @@ func (f *commonFlags) attach(cmd *cobra.Command) {
 		"treat any warning emitted during the run as an error (exit code 4)")
 	cmd.Flags().BoolVar(&f.FollowSymlinks, "follow-symlinks", false,
 		"follow symlinks during filesystem reads (opt-in, outside spec §18.2)")
-	cmd.Flags().BoolVar(&f.OutputValidate, "output-validate", false,
-		"validate emitted JSON against the bundled CycloneDX 1.7 schema (M9: accepted, vendor pending)")
+}
+
+// emitFlags layers generate-only flags on top of commonFlags. These
+// only make sense when an SBOM is actually being produced:
+//
+//   - --tag filters the pool before reachability.
+//   - --source-date-epoch drives deterministic timestamps + serial.
+//   - --output-validate checks the emitted document against its
+//     vendored schema.
+type emitFlags struct {
+	commonFlags
+	Tags               []string
+	SourceDateEpochSet bool
+	SourceDateEpoch    int64
+	OutputValidate     bool
+}
+
+func (f *emitFlags) attachEmit(cmd *cobra.Command) {
+	f.attach(cmd)
 	cmd.Flags().StringSliceVar(&f.Tags, "tag", nil,
 		"filter pool components to those whose tags include any listed value (§6.2)")
 	cmd.Flags().Int64Var(&f.SourceDateEpoch, "source-date-epoch", 0,
 		"override the SOURCE_DATE_EPOCH environment variable (seconds since Unix epoch)")
+	cmd.Flags().BoolVar(&f.OutputValidate, "output-validate", false,
+		"validate emitted JSON against the vendored CycloneDX 1.7 or SPDX 2.3 schema")
 	cmd.PreRunE = chainPreRun(cmd.PreRunE, func(cmd *cobra.Command, _ []string) error {
 		f.SourceDateEpochSet = cmd.Flags().Changed("source-date-epoch")
 		return nil
