@@ -79,6 +79,29 @@ func TestValidate_CleanAppendixExampleExitsZero(t *testing.T) {
 	}
 }
 
+func TestValidate_ParseErrorDoesNotDuplicatePath(t *testing.T) {
+	// manifest.ParseFile already prefixes its errors with the source
+	// path, so readManifests must not wrap the error with a second
+	// "parse <path>:" — doing so produces a stuttering error line.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad.json")
+	// Unknown schema version drives a parser-level error that does
+	// carry the path prefix.
+	bad := `{"schema":"primary-manifest/v","primary":{"name":"x"}}`
+	if err := os.WriteFile(path, []byte(bad), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, stderr, _ := withArgs(t, "validate", path)
+	s := stderr.String()
+	// The path should appear exactly once after the "error:" prefix.
+	if got := strings.Count(s, path); got != 1 {
+		t.Fatalf("path should appear once, saw %d times:\n%s", got, s)
+	}
+	if strings.Contains(s, "parse "+path) {
+		t.Fatalf("readManifests should not re-wrap with 'parse <path>:':\n%s", s)
+	}
+}
+
 func TestValidate_FailureDoesNotPrintOK(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bad.json")

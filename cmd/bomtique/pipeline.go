@@ -49,7 +49,10 @@ func readManifests(args []string, trace io.Writer) ([]*manifest.Manifest, error)
 				_, _ = fmt.Fprintln(trace, "skipped", path, "(no schema marker)")
 				continue
 			}
-			return nil, fmt.Errorf("parse %s: %w", path, err)
+			// manifest.ParseFile already prefixes its errors with the
+			// source path via pathOrUnknown / pathOrUnknownCSV, so we
+			// don't wrap again here — doing so duplicates the path.
+			return nil, err
 		}
 		_, _ = fmt.Fprintf(trace, "parsed %s (%s/%s)\n", path, m.Kind, m.Format)
 		out = append(out, m)
