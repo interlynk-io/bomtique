@@ -41,8 +41,12 @@ bomtique generate "pkg-manifests/*.json"
   filtered-out pool components look unreachable.
 - `--warnings-as-errors` — exit with code 4 if any `diag.Warn` line
   fires during the run.
-- `--follow-symlinks` / `--output-validate` — accepted for forward
-  compatibility; both are currently no-ops with a one-line warning.
+- `--output-validate` — validate every emitted document against the
+  vendored CycloneDX 1.7 or SPDX 2.3 schema. Bundled schemas are
+  embedded in the binary (no network access), so a schema failure
+  aborts the run with exit code 1.
+- `--follow-symlinks` — accepted for forward compatibility; currently a
+  no-op with a one-line warning. Symbolic links are still refused.
 
 ### Exit codes
 

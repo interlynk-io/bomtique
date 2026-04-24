@@ -239,9 +239,11 @@ section a task implements.
         purl → `pkg:generic/<pct-name>@<version>` RFC 3986 §2.3
         unreserved; `@version` dropped when absent; collisions rejected
         hard via `assignBOMRefs`.
-- [ ] Self-validate emitted JSON against a bundled copy of the CycloneDX 1.7
-      schema when `--validate-output` is passed (deferred — schema vendor
-      lands with M9's CLI flag).
+- [x] Self-validate emitted JSON against the vendored CycloneDX 1.7
+      schema when `--output-validate` is passed. Bundle lives in
+      `schemas/cyclonedx/` (bom-1.7.schema.json plus the four `$ref`
+      siblings: spdx, jsf-0.82, cryptography-defs). Validation runs
+      via `internal/schema` using `github.com/santhosh-tekuri/jsonschema/v6`.
 
 ## M8 — Determinism (`internal/emit/cyclonedx` + `internal/jcs`)
 
@@ -366,9 +368,10 @@ section a task implements.
 - [x] `--format spdx` wired in `cmd/bomtique/generate.go`; per-primary
       `<name>-<version>.spdx.json` filenames; tests cover the end-to-end
       path (exit 0, file present, `spdxVersion`/`DESCRIBES` sanity).
-- [ ] Post-emit JSON Schema validation (vendored SPDX 2.3 schema) under
-      `--validate-output` — deferred with the CycloneDX schema validation
-      to a follow-up PR.
+- [x] Post-emit JSON Schema validation against the vendored SPDX 2.3
+      schema (`schemas/spdx/spdx-schema.json`) under `--output-validate`.
+      Shares `internal/schema` with the CycloneDX path so both formats
+      go through the same santhosh-tekuri-backed validator.
 
 ## M11 — Discovery (non-normative, documented)
 
