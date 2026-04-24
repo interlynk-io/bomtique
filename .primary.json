@@ -15,6 +15,7 @@
     ],
     "depends-on": [
       "pkg:golang/github.com/google/uuid@v1.6.0",
+      "pkg:golang/github.com/santhosh-tekuri/jsonschema/v6@v6.0.2",
       "pkg:golang/github.com/spf13/cobra@v1.10.2",
       "pkg:golang/golang.org/x/text@v0.36.0",
       "pkg:golang/github.com/inconshreveable/mousetrap@v1.1.0",

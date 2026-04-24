@@ -12,6 +12,16 @@
       ]
     },
     {
+      "name": "github.com/santhosh-tekuri/jsonschema/v6",
+      "version": "v6.0.2",
+      "type": "library",
+      "license": "Apache-2.0",
+      "purl": "pkg:golang/github.com/santhosh-tekuri/jsonschema/v6@v6.0.2",
+      "external_references": [
+        { "type": "vcs", "url": "https://github.com/santhosh-tekuri/jsonschema" }
+      ]
+    },
+    {
       "name": "github.com/spf13/cobra",
       "version": "v1.10.2",
       "type": "library",
