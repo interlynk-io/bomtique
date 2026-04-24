@@ -19,7 +19,7 @@ const (
 )
 
 // TestConformance_Positive drives every fixture under
-// testdata/conformance/positive/. For each, `bomtique generate` runs
+// testdata/conformance/positive/. For each, `bomtique scan` runs
 // against the fixture directory with a fixed SOURCE_DATE_EPOCH, and
 // each produced .cdx.json is byte-compared to the golden sibling under
 // <fixture>/golden/.
@@ -49,12 +49,12 @@ func runPositiveFixture(t *testing.T, fixtureDir string, regen bool) {
 
 	outDir := t.TempDir()
 	_, _, err := withArgs(t,
-		"generate", fixtureDir,
+		"scan", fixtureDir,
 		"--out", outDir,
 		"--source-date-epoch", goldenSDE,
 	)
 	if code := exitCodeOf(err); code != exitOK {
-		t.Fatalf("generate exit %d: %v", code, err)
+		t.Fatalf("scan exit %d: %v", code, err)
 	}
 
 	goldenDir := filepath.Join(fixtureDir, goldenDirName)
@@ -102,12 +102,12 @@ func runDeterminismFixture(t *testing.T, fixtureDir string) {
 	runB := t.TempDir()
 	for i, outDir := range []string{runA, runB} {
 		_, _, err := withArgs(t,
-			"generate", fixtureDir,
+			"scan", fixtureDir,
 			"--out", outDir,
 			"--source-date-epoch", goldenSDE,
 		)
 		if code := exitCodeOf(err); code != exitOK {
-			t.Fatalf("generate run %d exit %d: %v", i+1, code, err)
+			t.Fatalf("scan run %d exit %d: %v", i+1, code, err)
 		}
 	}
 	diffTrees(t, runA, runB)

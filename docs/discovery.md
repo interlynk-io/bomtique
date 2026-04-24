@@ -7,13 +7,13 @@ input tree. This document describes what `bomtique` does.
 
 ## When discovery runs
 
-`bomtique generate` and `bomtique validate` both trigger discovery
+`bomtique scan` and `bomtique validate` both trigger discovery
 in two situations:
 
 - **Zero positional arguments**: walk the current working directory.
 - **A positional argument that is a directory**: walk that directory.
 
-Explicit file or glob arguments bypass discovery — `bomtique generate
+Explicit file or glob arguments bypass discovery — `bomtique scan
 internal/manifest/testdata/appendix/b1.json` parses just that file.
 
 ## Conventional filenames

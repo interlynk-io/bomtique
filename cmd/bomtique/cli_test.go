@@ -203,14 +203,14 @@ func TestValidate_NoArgsTriggersDiscovery(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// generate
+// scan
 // -----------------------------------------------------------------------------
 
-func TestGenerate_WritesPerPrimaryFile(t *testing.T) {
+func TestScan_WritesPerPrimaryFile(t *testing.T) {
 	appendix := filepath.Join("..", "..", "internal", "manifest", "testdata", "appendix")
 	out := t.TempDir()
 	_, _, err := withArgs(t,
-		"generate",
+		"scan",
 		filepath.Join(appendix, "b3_server_primary.json"),
 		filepath.Join(appendix, "b3_shared_components.json"),
 		"--out", out,
@@ -225,12 +225,12 @@ func TestGenerate_WritesPerPrimaryFile(t *testing.T) {
 	}
 }
 
-func TestGenerate_ByteIdenticalWithSDE(t *testing.T) {
+func TestScan_ByteIdenticalWithSDE(t *testing.T) {
 	// Stdout is the default output destination; no --out → NDJSON on
 	// stdout, which is what this determinism check wants.
 	appendix := filepath.Join("..", "..", "internal", "manifest", "testdata", "appendix")
 	args := []string{
-		"generate",
+		"scan",
 		filepath.Join(appendix, "b3_server_primary.json"),
 		filepath.Join(appendix, "b3_shared_components.json"),
 		"--source-date-epoch", "1700000000",
@@ -248,11 +248,11 @@ func TestGenerate_ByteIdenticalWithSDE(t *testing.T) {
 	}
 }
 
-func TestGenerate_FormatSPDXWritesPerPrimary(t *testing.T) {
+func TestScan_FormatSPDXWritesPerPrimary(t *testing.T) {
 	appendix := filepath.Join("..", "..", "internal", "manifest", "testdata", "appendix")
 	out := t.TempDir()
 	_, _, err := withArgs(t,
-		"generate",
+		"scan",
 		filepath.Join(appendix, "b1.json"),
 		"--format", "spdx",
 		"--out", out,
@@ -278,10 +278,10 @@ func TestGenerate_FormatSPDXWritesPerPrimary(t *testing.T) {
 	}
 }
 
-func TestGenerate_UnknownFormatIsUsageError(t *testing.T) {
+func TestScan_UnknownFormatIsUsageError(t *testing.T) {
 	appendix := filepath.Join("..", "..", "internal", "manifest", "testdata", "appendix")
 	_, _, err := withArgs(t,
-		"generate",
+		"scan",
 		filepath.Join(appendix, "b1.json"),
 		"--format", "bogus",
 	)
@@ -290,11 +290,11 @@ func TestGenerate_UnknownFormatIsUsageError(t *testing.T) {
 	}
 }
 
-func TestGenerate_StdoutNDJSON(t *testing.T) {
+func TestScan_StdoutNDJSON(t *testing.T) {
 	// Default output is NDJSON on stdout; one primary → one line.
 	appendix := filepath.Join("..", "..", "internal", "manifest", "testdata", "appendix")
 	stdout, _, err := withArgs(t,
-		"generate",
+		"scan",
 		filepath.Join(appendix, "b1.json"),
 		"--source-date-epoch", "1700000000",
 	)

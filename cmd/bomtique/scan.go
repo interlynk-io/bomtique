@@ -23,29 +23,29 @@ import (
 	vendored "github.com/interlynk-io/bomtique/schemas"
 )
 
-// generateFlags layers output-destination flags on top of the
-// emit-wide set (which already carries --tag, --source-date-epoch,
+// scanFlags layers output-destination flags on top of the emit-wide
+// set (which already carries --tag, --source-date-epoch,
 // --output-validate, plus the common filesystem cap + warnings
 // plumbing).
-type generateFlags struct {
+type scanFlags struct {
 	emitFlags
 	OutDir string
 	Format string
 }
 
-func newGenerateCmd() *cobra.Command {
-	f := &generateFlags{}
+func newScanCmd() *cobra.Command {
+	f := &scanFlags{}
 	cmd := &cobra.Command{
-		Use:   "generate [paths...]",
-		Short: "Generate SBOMs from Component Manifest v1 inputs",
-		Long: `generate parses every primary and components manifest from the paths supplied,
+		Use:   "scan [paths...]",
+		Short: "Scan Component Manifest v1 inputs and emit SBOMs",
+		Long: `scan parses every primary and components manifest from the paths supplied,
 builds the shared pool, resolves each primary's reachable closure, and emits one
 SBOM per primary. By default the SBOMs go to stdout as newline-delimited JSON
 (one compact JSON per line); pass --out <dir> to write per-primary files named
 <name>-<version>.cdx.json (or <name>.cdx.json when the primary carries no
 version).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runGenerate(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, args)
+			return runScan(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, args)
 		},
 	}
 	f.attachEmit(cmd)
@@ -54,7 +54,7 @@ version).`,
 	return cmd
 }
 
-func runGenerate(stdout, stderr io.Writer, f *generateFlags, args []string) error {
+func runScan(stdout, stderr io.Writer, f *scanFlags, args []string) error {
 	switch f.Format {
 	case "cyclonedx", "spdx":
 	default:
@@ -133,7 +133,7 @@ func runGenerate(stdout, stderr io.Writer, f *generateFlags, args []string) erro
 // result out.  When `validator` is non-nil (i.e. `--output-validate`
 // was requested), the emitted bytes are checked against the vendored
 // schema before being written, and a schema failure aborts the run.
-func emitOne(stdout, stderr io.Writer, f *generateFlags, pm *manifest.Manifest, p *pool.Pool, idx *graph.PoolIndex, prov provenanceIndex, multiPrimary bool, validator *schema.Validator) error {
+func emitOne(stdout, stderr io.Writer, f *scanFlags, pm *manifest.Manifest, p *pool.Pool, idx *graph.PoolIndex, prov provenanceIndex, multiPrimary bool, validator *schema.Validator) error {
 	primary := &pm.Primary.Primary
 
 	if err := pool.CheckPrimaryDistinct(primary, p); err != nil {
@@ -185,7 +185,7 @@ func emitOne(stdout, stderr io.Writer, f *generateFlags, pm *manifest.Manifest, 
 	return nil
 }
 
-func emitCycloneDX(f *generateFlags, primary *manifest.Component, primaryDir string, p *pool.Pool, r *graph.Reachability, prov provenanceIndex) ([]byte, error) {
+func emitCycloneDX(f *scanFlags, primary *manifest.Component, primaryDir string, p *pool.Pool, r *graph.Reachability, prov provenanceIndex) ([]byte, error) {
 	reachable := make([]cyclonedx.ReachableComponent, 0, len(r.Components))
 	for _, poolIdx := range r.Components {
 		c := &p.Components[poolIdx]
@@ -206,7 +206,7 @@ func emitCycloneDX(f *generateFlags, primary *manifest.Component, primaryDir str
 	}, opts)
 }
 
-func emitSPDX(f *generateFlags, primary *manifest.Component, primaryDir string, p *pool.Pool, r *graph.Reachability, prov provenanceIndex) ([]byte, error) {
+func emitSPDX(f *scanFlags, primary *manifest.Component, primaryDir string, p *pool.Pool, r *graph.Reachability, prov provenanceIndex) ([]byte, error) {
 	reachable := make([]spdx.ReachableComponent, 0, len(r.Components))
 	for _, poolIdx := range r.Components {
 		c := &p.Components[poolIdx]
