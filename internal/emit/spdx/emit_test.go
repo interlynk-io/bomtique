@@ -68,8 +68,14 @@ func TestEmit_DocumentShape(t *testing.T) {
 		t.Fatalf("created: got %v", info["created"])
 	}
 	creators := info["creators"].([]any)
-	if len(creators) != 1 || !strings.HasPrefix(creators[0].(string), "Tool:") {
-		t.Fatalf("creators: got %v", creators)
+	if len(creators) != 2 {
+		t.Fatalf("expected 2 creators (Tool + Organization), got %v", creators)
+	}
+	if !strings.HasPrefix(creators[0].(string), "Tool: bomtique-") {
+		t.Fatalf("creators[0]: got %v", creators[0])
+	}
+	if !strings.HasPrefix(creators[1].(string), "Organization: Interlynk.io") {
+		t.Fatalf("creators[1]: got %v", creators[1])
 	}
 }
 

@@ -19,7 +19,24 @@ import (
 	"github.com/interlynk-io/bomtique/internal/safefs"
 )
 
-const toolCreator = "Tool: bomtique-0.1.0"
+// defaultToolVersion is the fallback stamped into the `Tool:`
+// creator line when Options.ToolVersion is empty. The CLI supplies
+// the real version at startup via Options.ToolVersion.
+const defaultToolVersion = "dev"
+
+// organizationCreator identifies the publisher of bomtique, per
+// SPDX 2.3 §6.8. Emitted alongside the Tool: creator so consumers
+// see the vendor.
+const organizationCreator = "Organization: Interlynk.io (https://interlynk.io)"
+
+// toolCreator renders the `Tool: bomtique-<version>` creator
+// string. Extracted so the pedigree annotator helper can reuse it.
+func toolCreator(version string) string {
+	if version == "" {
+		version = defaultToolVersion
+	}
+	return "Tool: bomtique-" + version
+}
 
 // ReachableComponent mirrors cyclonedx.ReachableComponent — a pool
 // component paired with the manifest directory that sourced it for
@@ -42,6 +59,7 @@ type Options struct {
 	MaxFileSize     int64
 	Indent          bool
 	SourceDateEpoch *int64
+	ToolVersion     string
 }
 
 // Emit produces SPDX 2.3 JSON bytes for one primary. Determinism-wise
@@ -107,7 +125,7 @@ func Emit(in EmitInput, opts Options) ([]byte, error) {
 		DocumentNamespace: documentNamespace(in, epoch),
 		CreationInfo: &spdxCreation{
 			Created:  timestamp(epoch),
-			Creators: []string{toolCreator},
+			Creators: []string{toolCreator(opts.ToolVersion), organizationCreator},
 		},
 		Packages:      packages,
 		Relationships: relations,

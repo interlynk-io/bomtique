@@ -58,7 +58,7 @@ func buildPackage(c *manifest.Component, manifestDir, id string, drops *droppedC
 	pkg.ExternalRefs = buildExternalRefs(c)
 
 	if c.Pedigree != nil {
-		applyPedigree(&pkg, c.Pedigree, drops, timestampNow())
+		applyPedigree(&pkg, c.Pedigree, drops, timestampNow(), toolCreator(opts.ToolVersion))
 	}
 
 	if c.Scope != nil && *c.Scope != "" {

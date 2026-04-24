@@ -32,7 +32,16 @@ type cdxBOM struct {
 type cdxMetadata struct {
 	Timestamp  string         `json:"timestamp,omitempty"`
 	Lifecycles []cdxLifecycle `json:"lifecycles,omitempty"`
+	Tools      *cdxTools      `json:"tools,omitempty"`
 	Component  *cdxComponent  `json:"component,omitempty"`
+}
+
+// cdxTools carries the CycloneDX 1.5+ `metadata.tools` shape — an
+// object with `components[]` (and optionally `services[]`). The
+// pre-1.5 `[]cdxLegacyTool` array form is deprecated; we emit the
+// modern form only.
+type cdxTools struct {
+	Components []cdxComponent `json:"components,omitempty"`
 }
 
 type cdxLifecycle struct {
@@ -42,6 +51,7 @@ type cdxLifecycle struct {
 type cdxComponent struct {
 	BOMRef             string           `json:"bom-ref,omitempty"`
 	Type               string           `json:"type,omitempty"`
+	Publisher          string           `json:"publisher,omitempty"`
 	Name               string           `json:"name"`
 	Version            string           `json:"version,omitempty"`
 	Description        string           `json:"description,omitempty"`

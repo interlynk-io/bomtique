@@ -194,7 +194,7 @@ func emitCycloneDX(f *scanFlags, primary *manifest.Component, primaryDir string,
 			ManifestDir: prov.manifestDirFor(c),
 		})
 	}
-	opts := cyclonedx.Options{MaxFileSize: f.MaxFileSize}
+	opts := cyclonedx.Options{MaxFileSize: f.MaxFileSize, ToolVersion: version}
 	if f.SourceDateEpochSet {
 		v := f.SourceDateEpoch
 		opts.SourceDateEpoch = &v
@@ -215,7 +215,7 @@ func emitSPDX(f *scanFlags, primary *manifest.Component, primaryDir string, p *p
 			ManifestDir: prov.manifestDirFor(c),
 		})
 	}
-	opts := spdx.Options{MaxFileSize: f.MaxFileSize}
+	opts := spdx.Options{MaxFileSize: f.MaxFileSize, ToolVersion: version}
 	if f.SourceDateEpochSet {
 		v := f.SourceDateEpoch
 		opts.SourceDateEpoch = &v
