@@ -1,0 +1,95 @@
+# SPDX-FileCopyrightText: 2026 Interlynk.io
+# SPDX-License-Identifier: Apache-2.0
+#
+# goreleaser config for bomtique releases.  Verify locally with:
+#   goreleaser release --snapshot --clean --skip=sign,publish
+#
+# The full release path runs in CI under a tag push and signs artefacts
+# with cosign (keyless, via GitHub OIDC).
+
+version: 2
+
+project_name: bomtique
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: bomtique
+    main: ./cmd/bomtique
+    binary: bomtique
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # No darwin/amd64 in M13's scope — add if/when needed.
+      - goos: darwin
+        goarch: amd64
+      # No windows/arm64 in M13's scope either.
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: bomtique
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "darwin" }}Darwin
+      {{- else if eq .Os "linux" }}Linux
+      {{- else if eq .Os "windows" }}Windows
+      {{- else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+      - SECURITY.md
+      - docs/*.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+signs:
+  - id: cosign
+    cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    # The workflow is expected to provide keyless-signing env vars
+    # (COSIGN_EXPERIMENTAL=1, GitHub OIDC). Without them signing is
+    # skipped and the release still produces binaries + checksums.
+
+changelog:
+  use: github-native
+
+release:
+  draft: true
+  prerelease: auto
+  header: |
+    # bomtique {{ .Tag }}
+
+    Reference consumer for the Component Manifest v1 specification.
+    See [CHANGELOG.md](./CHANGELOG.md) for release highlights.

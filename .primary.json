@@ -1,0 +1,24 @@
+{
+  "schema": "primary-manifest/v1",
+  "primary": {
+    "name": "bomtique",
+    "version": "0.1.0",
+    "type": "application",
+    "description": "Reference consumer for the Component Manifest v1 specification",
+    "supplier": { "name": "Interlynk.io", "url": "https://interlynk.io" },
+    "license": "Apache-2.0",
+    "purl": "pkg:github/interlynk-io/bomtique@0.1.0",
+    "external_references": [
+      { "type": "website", "url": "https://github.com/interlynk-io/bomtique" },
+      { "type": "vcs", "url": "https://github.com/interlynk-io/bomtique" },
+      { "type": "issue-tracker", "url": "https://github.com/interlynk-io/bomtique/issues" }
+    ],
+    "depends-on": [
+      "pkg:golang/github.com/google/uuid@v1.6.0",
+      "pkg:golang/github.com/spf13/cobra@v1.10.2",
+      "pkg:golang/golang.org/x/text@v0.36.0",
+      "pkg:golang/github.com/inconshreveable/mousetrap@v1.1.0",
+      "pkg:golang/github.com/spf13/pflag@v1.0.9"
+    ]
+  }
+}

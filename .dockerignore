@@ -1,0 +1,7 @@
+.git
+.github
+bin
+sbom
+*.cdx.json
+*.spdx.json
+*.log

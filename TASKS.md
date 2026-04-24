@@ -429,15 +429,26 @@ section a task implements.
 
 ## M13 — Packaging, docs, release
 
-- [ ] `docs/`: `usage.md`, `discovery.md`, `determinism.md`, `security.md`,
-      `compatibility.md` (which spec MUSTs we enforce vs SHOULD).
-- [ ] `goreleaser` config producing static linux/amd64, linux/arm64,
-      darwin/arm64, windows/amd64 binaries; checksums; cosign signatures.
-- [ ] Dockerfile (distroless static base).
-- [ ] Dogfooding: `bomtique generate` on its own repo → commit the emitted
-      `bomtique.cdx.json` to the release artifacts.
-- [ ] `CHANGELOG.md` v0.1.0 entry enumerating conformance coverage.
-- [ ] Tag `v0.1.0` once conformance suite is green on all CI platforms.
+- [x] `docs/` landed: `usage.md`, `discovery.md` (M11), `determinism.md`,
+      `security.md`, `compatibility.md` (spec-MUST-vs-SHOULD map with per-
+      clause code-path citations).
+- [x] `.goreleaser.yaml` building linux/amd64, linux/arm64, darwin/arm64,
+      windows/amd64 with -trimpath + `-X main.version={{.Version}}`; SHA-256
+      checksums; cosign signing hook (keyless via GitHub OIDC at release
+      time).
+- [x] `Dockerfile` multi-stage build onto `gcr.io/distroless/static-
+      debian12:nonroot`. `.dockerignore` trims tests / SBOM artefacts.
+- [x] Dogfood manifests at the repo root (`.primary.json`,
+      `.components.json`) plus the committed output
+      `sbom/bomtique-0.1.0.cdx.json` — generated under
+      `SOURCE_DATE_EPOCH=1700000000` so it reruns byte-identically.
+- [x] `CHANGELOG.md` v0.1.0 entry enumerating every M1–M13 milestone
+      plus the explicit deferred items (canonical Appendix A schema,
+      `--output-validate`, `--follow-symlinks` opt-in, full SPDX grammar,
+      directory-walk fuzz corpus).
+- [ ] Tag `v0.1.0` once this PR merges and CI is green on all platforms.
+      Left to the repo owner to cut the tag; `goreleaser release` is
+      wired and ready.
 
 ## Cross-cutting invariants (asserted in tests, not just code)
 
