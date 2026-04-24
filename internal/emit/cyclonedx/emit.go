@@ -54,6 +54,13 @@ type Options struct {
 	// env value; otherwise no timestamp is emitted and the serial
 	// number is a UUIDv4 (random).
 	SourceDateEpoch *int64
+
+	// ToolVersion is the version string emitted inside
+	// `metadata.tools.components[0].version`. The CLI sets this from
+	// `main.version` at startup (so `-ldflags "-X main.version=..."`
+	// flows into the SBOM). Empty defaults to `"dev"` for unversioned
+	// local builds.
+	ToolVersion string
 }
 
 // Emit produces the CycloneDX 1.7 JSON bytes for one primary. The
@@ -110,6 +117,7 @@ func Emit(in EmitInput, opts Options) ([]byte, error) {
 		SpecVersion: specVersion,
 		Version:     1,
 		Metadata: &cdxMetadata{
+			Tools:      buildTools(opts.ToolVersion),
 			Component:  &primary,
 			Lifecycles: buildLifecycles(in.Primary.Lifecycles),
 		},
@@ -135,6 +143,32 @@ func Emit(in EmitInput, opts Options) ([]byte, error) {
 		return json.MarshalIndent(bom, "", "  ")
 	}
 	return json.Marshal(bom)
+}
+
+// buildTools emits the `metadata.tools.components[]` record
+// identifying bomtique as the producer. CycloneDX 1.5+ requires
+// tool identifiers to be full Component objects so vulnerability
+// scanners and provenance tooling can treat the BOM's producer like
+// any other component. The identifier is always present — a BOM
+// without a generator record is less useful than one without a
+// timestamp.
+func buildTools(version string) *cdxTools {
+	if version == "" {
+		version = "dev"
+	}
+	return &cdxTools{
+		Components: []cdxComponent{{
+			BOMRef:    "tool:bomtique",
+			Type:      "application",
+			Publisher: "Interlynk.io",
+			Name:      "bomtique",
+			Version:   version,
+			ExternalReferences: []cdxExternalRef{
+				{Type: "website", URL: "https://interlynk.io"},
+				{Type: "vcs", URL: "https://github.com/interlynk-io/bomtique"},
+			},
+		}},
+	}
 }
 
 // buildLifecycles maps manifest Lifecycle entries onto the CycloneDX

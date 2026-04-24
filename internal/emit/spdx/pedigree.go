@@ -22,7 +22,7 @@ import (
 //
 // `drops` accumulates per-class drop triggers so a single warning is
 // emitted after every package is processed.
-func applyPedigree(pkg *spdxPackage, p *manifest.Pedigree, drops *droppedCounter, annotationTimestamp string) {
+func applyPedigree(pkg *spdxPackage, p *manifest.Pedigree, drops *droppedCounter, annotationTimestamp, annotator string) {
 	var info strings.Builder
 
 	for _, a := range p.Ancestors {
@@ -54,7 +54,7 @@ func applyPedigree(pkg *spdxPackage, p *manifest.Pedigree, drops *droppedCounter
 		pkg.Annotations = append(pkg.Annotations, spdxAnnotation{
 			AnnotationDate: annotationTimestamp,
 			AnnotationType: "OTHER",
-			Annotator:      toolCreator,
+			Annotator:      annotator,
 			Comment:        formatPatchAnnotation(&patch),
 		})
 	}
