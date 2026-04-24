@@ -1,0 +1,7 @@
+{
+  "schema": "primary-manifest/v2",
+  "primary": {
+    "name": "future-self",
+    "version": "1.0.0"
+  }
+}

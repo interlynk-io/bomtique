@@ -1,0 +1,10 @@
+{
+  "schema": "primary-manifest/v1",
+  "primary": {
+    "name": "md5-bad",
+    "version": "1.0.0",
+    "hashes": [
+      { "algorithm": "MD5", "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+    ]
+  }
+}

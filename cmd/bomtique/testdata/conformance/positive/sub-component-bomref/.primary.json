@@ -1,0 +1,12 @@
+{
+  "schema": "primary-manifest/v1",
+  "primary": {
+    "name": "acme-imaging",
+    "version": "1.2.0",
+    "type": "application",
+    "purl": "pkg:pypi/acme-imaging@1.2.0",
+    "depends-on": [
+      "pkg:pypi/acme-imaging@1.2.0#c-ext/_core"
+    ]
+  }
+}

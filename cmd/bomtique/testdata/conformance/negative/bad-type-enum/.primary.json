@@ -1,0 +1,8 @@
+{
+  "schema": "primary-manifest/v1",
+  "primary": {
+    "name": "bad-type",
+    "version": "1.0.0",
+    "type": "not-a-real-type"
+  }
+}

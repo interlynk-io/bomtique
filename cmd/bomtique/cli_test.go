@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,6 +40,11 @@ func withArgs(t *testing.T, args ...string) (stdout, stderr *bytes.Buffer, err e
 	})
 
 	err = cmd.Execute()
+	// Mirror main's final "error: <msg>" line so tests that assert on
+	// stderr see the same output a real invocation would produce.
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "error:", err)
+	}
 	return
 }
 

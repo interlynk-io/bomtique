@@ -1,0 +1,18 @@
+{
+  "schema": "component-manifest/v1",
+  "components": [
+    {
+      "name": "libjpeg-turbo",
+      "version": "3.0.4",
+      "type": "library",
+      "scope": "optional",
+      "license": {
+        "expression": "IJG AND BSD-3-Clause"
+      },
+      "purl": "pkg:generic/libjpeg-turbo@3.0.4",
+      "external_references": [
+        { "type": "website", "url": "https://libjpeg-turbo.org" }
+      ]
+    }
+  ]
+}
