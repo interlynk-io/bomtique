@@ -30,7 +30,6 @@ import (
 type generateFlags struct {
 	emitFlags
 	OutDir string
-	Stdout bool
 	Format string
 }
 
@@ -40,17 +39,17 @@ func newGenerateCmd() *cobra.Command {
 		Use:   "generate [paths...]",
 		Short: "Generate SBOMs from Component Manifest v1 inputs",
 		Long: `generate parses every primary and components manifest from the paths supplied,
-builds the shared pool, resolves each primary's reachable closure, and writes one
-SBOM per primary. Output filename is <name>-<version>.cdx.json (or <name>.cdx.json
-when the primary carries no version). Use --stdout to concatenate as newline-
-delimited JSON instead of writing files.`,
+builds the shared pool, resolves each primary's reachable closure, and emits one
+SBOM per primary. By default the SBOMs go to stdout as newline-delimited JSON
+(one compact JSON per line); pass --out <dir> to write per-primary files named
+<name>-<version>.cdx.json (or <name>.cdx.json when the primary carries no
+version).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGenerate(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, args)
 		},
 	}
 	f.attachEmit(cmd)
-	cmd.Flags().StringVarP(&f.OutDir, "out", "o", "./sbom", "output directory for per-primary SBOMs")
-	cmd.Flags().BoolVar(&f.Stdout, "stdout", false, "write NDJSON to stdout instead of files")
+	cmd.Flags().StringVarP(&f.OutDir, "out", "o", "", "write per-primary SBOMs into this directory instead of stdout")
 	cmd.Flags().StringVar(&f.Format, "format", "cyclonedx", "output format (cyclonedx | spdx)")
 	return cmd
 }
@@ -85,7 +84,7 @@ func runGenerate(stdout, stderr io.Writer, f *generateFlags, args []string) erro
 		return newExitErr(exitValidationError, fmt.Errorf("processing set contains no primary manifests (§12.1)"))
 	}
 
-	if !f.Stdout {
+	if f.OutDir != "" {
 		if err := os.MkdirAll(f.OutDir, 0o755); err != nil {
 			return newExitErr(exitIOError, fmt.Errorf("mkdir %s: %w", f.OutDir, err))
 		}
@@ -166,8 +165,8 @@ func emitOne(stdout, stderr io.Writer, f *generateFlags, pm *manifest.Manifest, 
 		}
 	}
 
-	if f.Stdout {
-		// NDJSON: one compact JSON per line.
+	if f.OutDir == "" {
+		// Default: NDJSON to stdout, one compact JSON per line.
 		if _, err := stdout.Write(data); err != nil {
 			return newExitErr(exitIOError, fmt.Errorf("stdout write: %w", err))
 		}

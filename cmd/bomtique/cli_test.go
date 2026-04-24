@@ -226,13 +226,14 @@ func TestGenerate_WritesPerPrimaryFile(t *testing.T) {
 }
 
 func TestGenerate_ByteIdenticalWithSDE(t *testing.T) {
+	// Stdout is the default output destination; no --out → NDJSON on
+	// stdout, which is what this determinism check wants.
 	appendix := filepath.Join("..", "..", "internal", "manifest", "testdata", "appendix")
 	args := []string{
 		"generate",
 		filepath.Join(appendix, "b3_server_primary.json"),
 		filepath.Join(appendix, "b3_shared_components.json"),
 		"--source-date-epoch", "1700000000",
-		"--stdout",
 	}
 	stdoutA, _, err := withArgs(t, args...)
 	if err != nil {
@@ -290,12 +291,11 @@ func TestGenerate_UnknownFormatIsUsageError(t *testing.T) {
 }
 
 func TestGenerate_StdoutNDJSON(t *testing.T) {
-	// With a single primary, --stdout writes one JSON line.
+	// Default output is NDJSON on stdout; one primary → one line.
 	appendix := filepath.Join("..", "..", "internal", "manifest", "testdata", "appendix")
 	stdout, _, err := withArgs(t,
 		"generate",
 		filepath.Join(appendix, "b1.json"),
-		"--stdout",
 		"--source-date-epoch", "1700000000",
 	)
 	if err != nil {
