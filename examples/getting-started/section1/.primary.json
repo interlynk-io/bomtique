@@ -1,0 +1,14 @@
+{
+  "schema": "primary-manifest/v1",
+  "primary": {
+    "name": "device-firmware",
+    "version": "0.1.0",
+    "type": "firmware",
+    "license": {
+      "expression": "MIT"
+    },
+    "depends-on": [
+      "pkg:github/libressl/portable@3.9.0"
+    ]
+  }
+}

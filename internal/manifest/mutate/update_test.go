@@ -355,3 +355,88 @@ func mkdirAll(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 }
+
+func TestUpdate_Primary_VersionBumpLockstepPurl(t *testing.T) {
+	dir := t.TempDir()
+	seedPrimaryWithPurl(t, dir, "pkg:github/acme/app@1.0")
+
+	res, err := Update(UpdateOptions{FromDir: dir, Primary: true, ToVersion: "1.0.0"})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if !res.PurlVersionBumped {
+		t.Fatalf("expected PurlVersionBumped=true: %+v", res)
+	}
+	if !containsStr(res.FieldsChanged, "version") || !containsStr(res.FieldsChanged, "purl") {
+		t.Fatalf("expected version+purl in FieldsChanged: %v", res.FieldsChanged)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".primary.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := manifest.ParseJSON(data, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := m.Primary.Primary
+	if p.Version == nil || *p.Version != "1.0.0" {
+		t.Fatalf("version not bumped: %+v", p.Version)
+	}
+	if p.Purl == nil || *p.Purl != "pkg:github/acme/app@1.0.0" {
+		t.Fatalf("purl not bumped: %+v", p.Purl)
+	}
+}
+
+func TestUpdate_Primary_FieldReplace(t *testing.T) {
+	dir := t.TempDir()
+	seedPrimary(t, dir) // no purl, license MIT
+
+	_, err := Update(UpdateOptions{FromDir: dir, Primary: true, License: "Apache-2.0"})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, ".primary.json"))
+	m, _ := manifest.ParseJSON(data, "")
+	if m.Primary.Primary.License == nil || m.Primary.Primary.License.Expression != "Apache-2.0" {
+		t.Fatalf("license not updated: %+v", m.Primary.Primary.License)
+	}
+}
+
+func TestUpdate_Primary_RejectsRef(t *testing.T) {
+	dir := t.TempDir()
+	seedPrimary(t, dir)
+
+	_, err := Update(UpdateOptions{
+		FromDir: dir,
+		Primary: true,
+		Ref:     "anything@1",
+		License: "MIT",
+	})
+	if err == nil {
+		t.Fatal("expected error for --primary with ref, got nil")
+	}
+	if !strings.Contains(err.Error(), "--primary takes no <ref>") {
+		t.Fatalf("error should mention --primary: %v", err)
+	}
+}
+
+func TestUpdate_Primary_DryRunNoWrite(t *testing.T) {
+	dir := t.TempDir()
+	seedPrimaryWithPurl(t, dir, "pkg:github/acme/app@1.0")
+	before, _ := os.ReadFile(filepath.Join(dir, ".primary.json"))
+
+	res, err := Update(UpdateOptions{
+		FromDir: dir, Primary: true, ToVersion: "1.0.0", DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if !res.DryRun {
+		t.Fatalf("DryRun flag not propagated")
+	}
+	after, _ := os.ReadFile(filepath.Join(dir, ".primary.json"))
+	if !bytes.Equal(before, after) {
+		t.Fatal("dry-run wrote to disk")
+	}
+}

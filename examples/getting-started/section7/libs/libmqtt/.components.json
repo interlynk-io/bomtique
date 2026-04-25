@@ -1,0 +1,15 @@
+{
+  "schema": "component-manifest/v1",
+  "components": [
+    {
+      "name": "libmqtt",
+      "version": "4.3.0",
+      "description": "Acme MQTT client library",
+      "supplier": { "name": "Acme Corp" },
+      "license": { "expression": "EPL-2.0" },
+      "purl": "pkg:generic/acme/libmqtt@4.3.0",
+      "depends-on": ["pkg:github/libressl/portable@3.9.0"],
+      "tags": ["core", "networking"]
+    }
+  ]
+}
