@@ -130,12 +130,10 @@ bomtique manifest add --from ./incoming/libx.json
 # Read from stdin (tee from another tool)
 cat libx.json | bomtique manifest add --from -
 
-# Auto-fetch from a registry (default when --purl matches an
-# importer) — works for pkg:github, pkg:gitlab, pkg:npm, pkg:pypi,
-# pkg:cargo. Name and version still come from the flags.
-bomtique manifest add --online \
-  --purl pkg:npm/express@4.18.2 \
-  --name express --version 4.18.2
+# Fetch metadata from a registry via --ref. Accepts both purl and
+# URL forms for github, gitlab, npm, pypi, and crates.io.
+bomtique manifest add --ref pkg:npm/express@4.18.2
+bomtique manifest add --ref https://www.npmjs.com/package/express/v/4.18.2
 
 # Record a repo-local vendored component (§9.3) with a directory
 # hash directive (digest computed at scan time) and an upstream
@@ -167,10 +165,10 @@ with `--into <json-path>`.
 
 ### Registry importers
 
-`--online` requires a registered importer to match the ref and
-errors when none does. Default mode auto-fetches when an importer
-matches and falls back to a skeleton otherwise. `--offline` skips
-the fetch entirely.
+`--ref <purl-or-url>` triggers a registry fetch. The ref must match
+one of the registered importers below; otherwise `add` fails with
+`ErrUnsupportedRef`. Without `--ref`, no fetch happens and the
+component is built purely from flags.
 
 | Ref shape | Importer | Auth env var | Fields lifted |
 |-----------|----------|--------------|---------------|
@@ -186,13 +184,15 @@ Non-defaults:
 - Mirror overrides (tests / air-gapped): `BOMTIQUE_GITHUB_BASE_URL`,
   `BOMTIQUE_NPM_BASE_URL`, `BOMTIQUE_PYPI_BASE_URL`,
   `BOMTIQUE_CARGO_BASE_URL`.
-- `--offline` is mutually exclusive with `--online`.
+- `BOMTIQUE_OFFLINE=1`: validates `--ref` against the importer set
+  but skips the HTTP call. Useful for air-gapped CI that drives
+  `add`/`update` from scripted `--ref` values.
 
 Network policy: one HTTPS GET per importer call (two for GitHub
 tag-confirmation and for Cargo), 30 s total timeout, 1 MiB response
 cap enforced client-side via `io.LimitReader`, no retries. Tokens
 are sent once via the standard auth header and never appear in error
-output — a dedicated test pins that behaviour per importer.
+output; a dedicated test pins that behaviour per importer.
 
 Flag values always override fields lifted from a `--from` file or an
 importer response. Each override emits one `warning:` line on
@@ -230,9 +230,9 @@ bomtique manifest update pkg:generic/libx@1.0 --to 2.0
 # Null out a field without setting it to empty string
 bomtique manifest update pkg:generic/libx@1.0 --clear-license
 
-# Online refresh — re-fetch metadata from the importer and
-# re-apply flag overrides on top
-bomtique manifest update pkg:npm/express@4.18.2 --online
+# Refresh metadata from the importer matching the existing purl,
+# and re-apply flag overrides on top
+bomtique manifest update pkg:npm/express@4.18.2 --refresh
 ```
 
 `--to <version>` also syncs the `purl` version segment when it

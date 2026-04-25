@@ -133,9 +133,9 @@ func TestAdd_VendoredAt_UpstreamPurlCollisionRejected(t *testing.T) {
 	seedPrimaryWithPurl(t, dir, "pkg:github/acme/device-firmware@1.0")
 	mkVendorDir(t, dir, "src/vendor")
 
-	// Supply the same purl on both sides. Offline=true isolates the
-	// test from the global GitHubImporter (registered in init()) so
-	// we exercise the §9.3 collision check, not the network path.
+	// Supply the same purl on both sides. With no --ref, no fetch
+	// happens, so we exercise the §9.3 collision check independently
+	// of the network path.
 	_, err := Add(AddOptions{
 		FromDir: dir,
 		Name:    "v", Version: "1",
@@ -144,7 +144,6 @@ func TestAdd_VendoredAt_UpstreamPurlCollisionRejected(t *testing.T) {
 		UpstreamName:    "libx",
 		UpstreamVersion: "2.4.0",
 		UpstreamPurl:    "pkg:github/upstream-org/libx@2.4.0",
-		Offline:         true,
 	})
 	if err == nil {
 		t.Fatal("expected §9.3 rejection on upstream==component purl")

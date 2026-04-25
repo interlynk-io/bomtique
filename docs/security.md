@@ -56,9 +56,10 @@ to:
 and never dereferenced.
 
 The only network surface in the binary is the `internal/regfetch`
-package, used exclusively by `bomtique manifest add` and
-`bomtique manifest update` under `--online` (opt-in on update,
-default-on-match on add). A consumer-path lint test
+package, used exclusively by `bomtique manifest add` (when `--ref`
+is supplied) and `bomtique manifest update` (when `--refresh` is
+supplied). Without those flags, neither command touches the network.
+A consumer-path lint test
 (`TestNoNetworkImportsOutsideRegfetch`) walks every production `.go`
 file and fails if `net/http`, `net.Dial`, or `net.DefaultResolver`
 is referenced outside `cmd/bomtique/` and `internal/regfetch/`.
@@ -107,12 +108,17 @@ var cannot redirect, say, a pkg:github ref to a non-GitHub host.
 - The Client carries no credential material; a fresh `NewClient()`
   is safe to log.
 
-### Opt-out: `--offline`
+### Opt-out
 
-Users who need absolute network silence pass `--offline` to
-`manifest add` / `manifest update`. The code path that would touch
-`regfetch` is bypassed entirely; no DNS lookup, no TCP connect.
-`--offline` and `--online` are mutually exclusive.
+The default opt-out is simply not passing `--ref` (on `add`) or
+`--refresh` (on `update`); both commands then build the component
+purely from flags and the network is never touched.
+
+For environments where `add`/`update` invocations are scripted with
+`--ref` values that can't be removed, set `BOMTIQUE_OFFLINE=1`. The
+ref is still validated against the importer registry (so typos and
+unsupported shapes still error), but the HTTP call is skipped: no
+DNS lookup, no TCP connect.
 
 ## Hash algorithm allowlist (§8.1, §18.5)
 

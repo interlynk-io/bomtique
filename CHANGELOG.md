@@ -6,6 +6,32 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed (breaking)
+
+- `bomtique manifest add`: removed `--online` and `--offline` flags;
+  added `--ref <purl-or-url>`. A registry fetch happens when (and
+  only when) `--ref` is supplied and matches a registered importer
+  (github, gitlab, npm, pypi, crates.io); URL form is now first-class
+  for every importer (e.g.
+  `--ref https://github.com/libressl/portable/releases/tag/v3.9.0`).
+  When `--ref` is omitted, no fetch happens. When `--ref` is supplied
+  but no importer matches, `add` errors with `ErrUnsupportedRef`.
+  `--purl` no longer drives the importer match — it's purely the
+  literal purl recorded on the component. Migration: rename `--online
+  --purl pkg:npm/foo@1` to `--ref pkg:npm/foo@1`; drop `--offline`
+  (no fetch is now the default).
+- `bomtique manifest update`: removed `--online` and `--offline`
+  flags; added `--refresh`. Use `--refresh` to refetch metadata from
+  the importer matching the target component's existing purl.
+  Migration: rename `--online` to `--refresh`; drop `--offline`.
+- `--name` no longer doubles as a URL/ref carrier. URL inputs go
+  through `--ref` exclusively; passing a URL via `--name` now stores
+  it verbatim as the component's name field.
+- New `BOMTIQUE_OFFLINE=1` env var: hard kill switch that validates
+  `--ref` / `--refresh` purls against the importer registry but skips
+  the HTTP call. Useful for air-gapped CI driving `add`/`update` from
+  scripted ref values.
+
 ### Added (v0.2.0 preview — M14 hand-authored mutation surface)
 
 **Mutation engine (M14.0).**

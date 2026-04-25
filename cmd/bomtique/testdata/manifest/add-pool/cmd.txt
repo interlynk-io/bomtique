@@ -1,8 +1,7 @@
 # First pool add creates .components.json alongside the primary.
-# Offline so the global registry doesn't try to fetch pkg:generic.
+# No --ref, so no registry fetch happens.
 manifest
 add
---offline
 --name
 libx
 --version
