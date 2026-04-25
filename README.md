@@ -16,7 +16,8 @@ Pick the channel that matches your platform.
 ### Homebrew (macOS, Linux)
 
 ```bash
-brew install interlynk-io/tap/bomtique
+brew tap interlynk-io/tap
+brew install bomtique
 ```
 
 ### Docker
