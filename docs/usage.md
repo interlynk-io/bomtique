@@ -137,13 +137,11 @@ bomtique manifest add --ref https://www.npmjs.com/package/express/v/4.18.2
 
 # Record a repo-local vendored component (§9.3) with a directory
 # hash directive (digest computed at scan time) and an upstream
-# ancestor.
+# ancestor whose metadata is fetched from GitHub.
 bomtique manifest add \
   --name vendor-libx --version 2.4.0 \
   --vendored-at ./src/vendor-libx --ext c,h \
-  --upstream-name libx --upstream-version 2.4.0 \
-  --upstream-purl pkg:github/upstream-org/libx@2.4.0 \
-  --upstream-supplier "Upstream Inc"
+  --upstream-ref https://github.com/upstream-org/libx/releases/tag/v2.4.0
 
 # Append to the primary's depends-on instead of the pool
 bomtique manifest add --primary \

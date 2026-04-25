@@ -23,6 +23,7 @@ type updateFlags struct {
 	ToVer   string
 	ExtList []string
 	Refresh bool
+	Primary bool
 
 	Name          string
 	Version       string
@@ -57,10 +58,12 @@ type updateFlags struct {
 func newManifestUpdateCmd() *cobra.Command {
 	f := &updateFlags{}
 	cmd := &cobra.Command{
-		Use:   "update <ref>",
+		Use:   "update [<ref>]",
 		Short: "Update an existing component's metadata",
 		Long: `update locates the component matching <ref> (pkg:<type>/<name>[@<version>]
-or <name>@<version>) and applies the supplied changes in place.
+or <name>@<version>) and applies the supplied changes in place. With
+--primary, it instead updates the primary manifest's primary
+component and takes no <ref> argument.
 
 Change model:
   * Unset value flags preserve existing values — no field is touched unless
@@ -101,10 +104,25 @@ Examples:
   bomtique manifest update pkg:npm/express@4.18.2 --refresh
 
   # dry-run preview
-  bomtique manifest update libx@1.0 --license MIT --dry-run`,
-		Args: cobra.ExactArgs(1),
+  bomtique manifest update libx@1.0 --license MIT --dry-run
+
+  # bump the primary's version (and purl segment in lockstep) at release time
+  bomtique manifest update --primary --to 1.0.0`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if f.Primary {
+				if len(args) > 0 {
+					return fmt.Errorf("--primary takes no <ref> argument")
+				}
+				return nil
+			}
+			return cobra.ExactArgs(1)(cmd, args)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runManifestUpdate(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, args[0])
+			ref := ""
+			if len(args) > 0 {
+				ref = args[0]
+			}
+			return runManifestUpdate(cmd.OutOrStdout(), cmd.ErrOrStderr(), f, ref)
 		},
 	}
 
@@ -120,6 +138,9 @@ Examples:
 		"re-fetch metadata from the importer matching the target's purl; "+
 			"fails if no importer matches. Set BOMTIQUE_OFFLINE=1 to skip "+
 			"the HTTP call.")
+	cmd.Flags().BoolVar(&f.Primary, "primary", false,
+		"update the primary manifest's primary component instead of "+
+			"locating a pool entry by ref. Takes no <ref> argument.")
 
 	cmd.Flags().StringVar(&f.Name, "name", "", "rename component")
 	cmd.Flags().StringVar(&f.Version, "version", "", "replace version (use --to for lockstep purl bump)")
@@ -205,6 +226,7 @@ func runManifestUpdate(stdout, stderr io.Writer, f *updateFlags, ref string) err
 		ClearPedigreePatches: f.ClearPedigreePatches,
 
 		Refresh: f.Refresh,
+		Primary: f.Primary,
 	}
 
 	res, err := mutate.Update(opts)

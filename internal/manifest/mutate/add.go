@@ -79,9 +79,13 @@ type AddOptions struct {
 	//     (unless Purl was set explicitly);
 	//   - a single directory-form hash directive (digest computed
 	//     at scan time per §15.4, not here);
-	//   - pedigree.ancestors[0] built from the Upstream* fields.
+	//   - pedigree.ancestors[0] built from UpstreamRef (when set,
+	//     the ref is fetched through the importer registry the same
+	//     way --ref drives the component side) and the Upstream*
+	//     scalar fields, which override anything fetched.
 	VendoredAt       string
 	Extensions       []string
+	UpstreamRef      string
 	UpstreamName     string
 	UpstreamVersion  string
 	UpstreamPurl     string
@@ -549,17 +553,27 @@ func formatFor(path string) manifest.Format {
 }
 
 // tryRegfetch resolves opts.Ref against the importer registry and
-// fetches metadata when a match is found. Behaviour:
+// fetches metadata when a match is found.
+func tryRegfetch(opts AddOptions) (*manifest.Component, error) {
+	return fetchByRef(opts, opts.Ref)
+}
+
+// fetchByRef resolves an arbitrary ref (purl or URL) against the
+// importer registry and returns the fetched component. Behaviour:
 //
-//   - opts.Ref empty: returns (nil, nil); no fetch is attempted.
-//   - opts.Ref set, no importer matches: returns ErrUnsupportedRef.
-//   - opts.Ref set, importer matches, BOMTIQUE_OFFLINE=1: returns
+//   - ref empty: returns (nil, nil); no fetch is attempted.
+//   - ref set, no importer matches: returns ErrUnsupportedRef.
+//   - ref set, importer matches, BOMTIQUE_OFFLINE=1: returns
 //     (nil, nil) — the ref is validated against the registry but no
 //     HTTP call is made.
-//   - opts.Ref set, importer matches: invokes Fetch and returns its
+//   - ref set, importer matches: invokes Fetch and returns its
 //     result.
-func tryRegfetch(opts AddOptions) (*manifest.Component, error) {
-	ref := strings.TrimSpace(opts.Ref)
+//
+// Used by both --ref (component-side) and --upstream-ref
+// (pedigree.ancestors[0]-side); the registry/client/context come
+// from opts in either case.
+func fetchByRef(opts AddOptions, rawRef string) (*manifest.Component, error) {
+	ref := strings.TrimSpace(rawRef)
 	if ref == "" {
 		return nil, nil
 	}
@@ -683,10 +697,15 @@ func applyVendoredAt(c *manifest.Component, opts AddOptions, targetPath, fromDir
 	return nil
 }
 
-// buildUpstreamAncestor constructs the §9.1 Ancestor entry from the
-// --upstream-* flags. Returns nil when no upstream metadata was
-// supplied (the caller then emits no ancestor).
+// buildUpstreamAncestor constructs the §9.1 Ancestor entry. When
+// opts.UpstreamRef is set it's fetched via the importer registry
+// (same machinery as opts.Ref) and used as the base; the
+// --upstream-* scalar flags then layer on top as overrides. When
+// UpstreamRef is empty the ancestor is built purely from the
+// scalar flags. Returns nil when no upstream metadata was
+// supplied at all (the caller then emits no ancestor).
 func buildUpstreamAncestor(opts AddOptions) (*manifest.Component, error) {
+	upstreamRef := strings.TrimSpace(opts.UpstreamRef)
 	name := strings.TrimSpace(opts.UpstreamName)
 	version := strings.TrimSpace(opts.UpstreamVersion)
 	upstreamPurl := strings.TrimSpace(opts.UpstreamPurl)
@@ -694,19 +713,32 @@ func buildUpstreamAncestor(opts AddOptions) (*manifest.Component, error) {
 	website := strings.TrimSpace(opts.UpstreamWebsite)
 	vcs := strings.TrimSpace(opts.UpstreamVCS)
 
-	if name == "" && version == "" && upstreamPurl == "" && supplier == "" && website == "" && vcs == "" {
+	allEmpty := upstreamRef == "" && name == "" && version == "" &&
+		upstreamPurl == "" && supplier == "" && website == "" && vcs == ""
+	if allEmpty {
 		return nil, nil
 	}
-	// §9.1: ancestor follows Component identity rules — name required,
-	// plus one of version/purl/hashes.
-	if name == "" {
-		return nil, errors.New("--upstream-name is required when --vendored-at is used with any --upstream-* flag")
+
+	// Start from the importer's component when --upstream-ref is set;
+	// otherwise from a fresh skeleton.
+	var a *manifest.Component
+	if upstreamRef != "" {
+		fetched, err := fetchByRef(opts, upstreamRef)
+		if err != nil {
+			return nil, fmt.Errorf("--upstream-ref: %w", err)
+		}
+		if fetched != nil {
+			a = fetched
+		}
 	}
-	if version == "" && upstreamPurl == "" {
-		return nil, errors.New("--upstream-version or --upstream-purl is required to identify the upstream ancestor (§9.1)")
+	if a == nil {
+		a = &manifest.Component{}
 	}
 
-	a := &manifest.Component{Name: name}
+	// Layer scalar overrides on top of whatever the fetch produced.
+	if name != "" {
+		a.Name = name
+	}
 	if version != "" {
 		a.Version = &version
 	}
@@ -723,6 +755,15 @@ func buildUpstreamAncestor(opts AddOptions) (*manifest.Component, error) {
 	if vcs != "" {
 		a.ExternalReferences = append(a.ExternalReferences,
 			manifest.ExternalRef{Type: "vcs", URL: vcs})
+	}
+
+	// §9.1: ancestor follows Component identity rules — name required,
+	// plus one of version/purl/hashes. Validate after merging.
+	if a.Name == "" {
+		return nil, errors.New("--upstream-name is required (or --upstream-ref pointing at a component the importer can name)")
+	}
+	if a.Version == nil && a.Purl == nil && len(a.Hashes) == 0 {
+		return nil, errors.New("--upstream-version or --upstream-purl is required to identify the upstream ancestor (§9.1)")
 	}
 	return a, nil
 }

@@ -1,0 +1,166 @@
+{
+  "schema": "component-manifest/v1",
+  "components": [
+    {
+      "name": "libtls",
+      "version": "3.9.0",
+      "description": "LibreSSL Portable itself. This includes the build scaffold and compatibility layer that builds portable LibreSSL from the OpenBSD source code. Pull requests or patches sent to tech@openbsd.org are welcome.",
+      "license": {
+        "expression": "ISC"
+      },
+      "purl": "pkg:github/libressl/portable@3.9.0",
+      "external_references": [
+        {
+          "type": "website",
+          "url": "https://www.libressl.org"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/libressl/portable"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/libressl/portable/issues"
+        }
+      ],
+      "tags": [
+        "core"
+      ]
+    },
+    {
+      "name": "lvgl",
+      "version": "v9.2.2",
+      "description": "Embedded graphics library to create beautiful UIs for any MCU, MPU and display type. ",
+      "license": {
+        "expression": "MIT"
+      },
+      "purl": "pkg:github/lvgl/lvgl@v9.2.2",
+      "external_references": [
+        {
+          "type": "website",
+          "url": "https://lvgl.io"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/lvgl/lvgl"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/lvgl/lvgl/issues"
+        }
+      ],
+      "tags": [
+        "display"
+      ]
+    },
+    {
+      "name": "cjson",
+      "version": "1.7.17",
+      "description": "Ultralightweight JSON parser (vendored fork)",
+      "supplier": {
+        "name": "Dave Gamble"
+      },
+      "license": {
+        "expression": "MIT"
+      },
+      "purl": "pkg:github/acme/device-firmware/src/cjson@1.7.17",
+      "hashes": [
+        {
+          "algorithm": "SHA-256",
+          "path": "./src/cjson/",
+          "extensions": [
+            "c",
+            "h"
+          ]
+        }
+      ],
+      "pedigree": {
+        "ancestors": [
+          {
+            "name": "cJSON",
+            "version": "v1.7.17",
+            "description": "Ultralightweight JSON parser in ANSI C",
+            "license": {
+              "expression": "MIT"
+            },
+            "purl": "pkg:github/DaveGamble/cJSON@v1.7.17",
+            "external_references": [
+              {
+                "type": "vcs",
+                "url": "https://github.com/DaveGamble/cJSON"
+              },
+              {
+                "type": "issue-tracker",
+                "url": "https://github.com/DaveGamble/cJSON/issues"
+              }
+            ]
+          }
+        ],
+        "patches": [
+          {
+            "type": "backport",
+            "diff": {
+              "url": "./src/cjson/patches/cjson-fix-int-overflow.patch"
+            },
+            "resolves": [
+              {
+                "type": "security",
+                "name": "CVE-2024-XXXXX"
+              }
+            ]
+          }
+        ]
+      },
+      "tags": [
+        "core"
+      ]
+    },
+    {
+      "name": "miniz",
+      "version": "3.0.2",
+      "supplier": {
+        "name": "Rich Geldreich"
+      },
+      "license": {
+        "expression": "MIT"
+      },
+      "purl": "pkg:github/acme/device-firmware/src/miniz@3.0.2",
+      "hashes": [
+        {
+          "algorithm": "SHA-256",
+          "path": "./src/miniz/",
+          "extensions": [
+            "c",
+            "h"
+          ]
+        }
+      ],
+      "pedigree": {
+        "ancestors": [
+          {
+            "name": "miniz",
+            "version": "3.0.2",
+            "description": "miniz: Single C source file zlib-replacement library, originally from code.google.com/p/miniz",
+            "license": {
+              "expression": "MIT"
+            },
+            "purl": "pkg:github/richgel999/miniz@3.0.2",
+            "external_references": [
+              {
+                "type": "vcs",
+                "url": "https://github.com/richgel999/miniz"
+              },
+              {
+                "type": "issue-tracker",
+                "url": "https://github.com/richgel999/miniz/issues"
+              }
+            ]
+          }
+        ]
+      },
+      "tags": [
+        "core"
+      ]
+    }
+  ]
+}

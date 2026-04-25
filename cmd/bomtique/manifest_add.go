@@ -45,6 +45,7 @@ type addFlags struct {
 
 	VendoredAt       string
 	Extensions       []string
+	UpstreamRef      string
 	UpstreamName     string
 	UpstreamVersion  string
 	UpstreamPurl     string
@@ -96,9 +97,11 @@ at once:
     set explicitly);
   * one directory-form SHA-256 hash directive on that path (digest is
     computed at scan time, not now — edit freely until then);
-  * pedigree.ancestors[0] built from the --upstream-* flags. --upstream-name
-    and one of --upstream-version / --upstream-purl are required when any
-    --upstream-* flag is supplied.
+  * pedigree.ancestors[0] built from --upstream-ref (when set, fetched
+    via the importer registry the same way --ref drives the component
+    side) plus the --upstream-* scalar flags as overrides. With no
+    --upstream-ref, --upstream-name and one of --upstream-version /
+    --upstream-purl are required when any --upstream-* flag is supplied.
 --ext filters the directory-hash walk to a case-insensitive extension set
 (e.g. --ext c,h,cpp). Ignored when --vendored-at points at a regular file.
 
@@ -129,13 +132,12 @@ Examples:
   # registry fetch via URL
   bomtique manifest add --ref https://www.npmjs.com/package/express/v/4.18.2
 
-  # vendored component with directory-hash and upstream ancestor
+  # vendored component with directory-hash and a fetched upstream
+  # ancestor (license/description/external refs from GitHub)
   bomtique manifest add \
     --name vendor-libx --version 2.4.0 \
     --vendored-at ./src/vendor-libx --ext c,h \
-    --upstream-name libx --upstream-version 2.4.0 \
-    --upstream-purl pkg:github/upstream-org/libx@2.4.0 \
-    --upstream-supplier "Upstream Inc"
+    --upstream-ref pkg:github/upstream-org/libx@2.4.0
 
   # append to the primary's depends-on instead of the pool
   bomtique manifest add --primary \
@@ -189,8 +191,13 @@ Examples:
 		"relative path to vendored source dir; installs a directory-form SHA-256 hash directive")
 	cmd.Flags().StringSliceVar(&f.Extensions, "ext", nil,
 		"directory-hash extension filter (case-insensitive, comma-separated): e.g. c,h,cpp")
+	cmd.Flags().StringVar(&f.UpstreamRef, "upstream-ref", "",
+		"importer ref (purl or URL) for pedigree.ancestors[0]; fetches "+
+			"the upstream's metadata the same way --ref does on the "+
+			"component side. --upstream-* scalar flags override fetched "+
+			"fields. Set BOMTIQUE_OFFLINE=1 to skip the HTTP call.")
 	cmd.Flags().StringVar(&f.UpstreamName, "upstream-name", "",
-		"ancestor name for pedigree.ancestors[0] (required with any --upstream-* flag)")
+		"ancestor name for pedigree.ancestors[0] (required unless --upstream-ref produces one)")
 	cmd.Flags().StringVar(&f.UpstreamVersion, "upstream-version", "",
 		"ancestor version (one of --upstream-version / --upstream-purl is required)")
 	cmd.Flags().StringVar(&f.UpstreamPurl, "upstream-purl", "", "ancestor purl (must differ from the component's own purl)")
@@ -233,6 +240,7 @@ func runManifestAdd(stdout, stderr io.Writer, f *addFlags, stdin io.Reader) erro
 
 		VendoredAt:       f.VendoredAt,
 		Extensions:       f.Extensions,
+		UpstreamRef:      f.UpstreamRef,
 		UpstreamName:     f.UpstreamName,
 		UpstreamVersion:  f.UpstreamVersion,
 		UpstreamPurl:     f.UpstreamPurl,

@@ -1,0 +1,18 @@
+{
+  "schema": "primary-manifest/v1",
+  "primary": {
+    "name": "device-firmware",
+    "version": "1.0.0",
+    "type": "firmware",
+    "license": {
+      "expression": "MIT"
+    },
+    "depends-on": [
+      "pkg:github/libressl/portable@3.9.0",
+      "pkg:github/lvgl/lvgl@v9.2.2",
+      "pkg:github/acme/device-firmware/src/cjson@1.7.17",
+      "pkg:github/acme/device-firmware/src/miniz@3.0.2",
+      "pkg:generic/acme/libmqtt@4.4.0"
+    ]
+  }
+}

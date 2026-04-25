@@ -233,6 +233,109 @@ func TestAdd_Ref_VendoredAtNoFetchByDefault(t *testing.T) {
 	}
 }
 
+func TestAdd_UpstreamRef_PopulatesAncestorFromImporter(t *testing.T) {
+	dir := t.TempDir()
+	seedPrimaryWithPurl(t, dir, "pkg:github/acme/repo@1")
+	mkVendorDir(t, dir, "src/vendor")
+	r := registryWith(&fakePoolImporter{
+		FetchFn: func(ctx context.Context, c *regfetch.Client, ref string) (*manifest.Component, error) {
+			return &manifest.Component{
+				Name:        "upstream-libx",
+				Version:     strPtr("2.4.0"),
+				Purl:        strPtr("pkg:fake/upstream/libx@2.4.0"),
+				Description: strPtr("upstream description"),
+				License:     &manifest.License{Expression: "MIT"},
+			}, nil
+		},
+	})
+
+	res, err := Add(AddOptions{
+		FromDir:     dir,
+		Name:        "v",
+		Version:     "2.4.0",
+		VendoredAt:  "./src/vendor",
+		UpstreamRef: "pkg:fake/upstream/libx@2.4.0",
+		Registry:    r,
+	})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	cm, _ := parseComponentsFile(res.Path)
+	c := cm.Components[0]
+	if c.Pedigree == nil || len(c.Pedigree.Ancestors) == 0 {
+		t.Fatalf("ancestor missing: %+v", c.Pedigree)
+	}
+	a := c.Pedigree.Ancestors[0]
+	if a.Name != "upstream-libx" {
+		t.Fatalf("ancestor name not from importer: %q", a.Name)
+	}
+	if a.Description == nil || *a.Description != "upstream description" {
+		t.Fatalf("ancestor description not from importer: %+v", a.Description)
+	}
+	if a.License == nil || a.License.Expression != "MIT" {
+		t.Fatalf("ancestor license not from importer: %+v", a.License)
+	}
+}
+
+func TestAdd_UpstreamRef_ScalarFlagsOverrideFetched(t *testing.T) {
+	dir := t.TempDir()
+	seedPrimaryWithPurl(t, dir, "pkg:github/acme/repo@1")
+	mkVendorDir(t, dir, "src/vendor")
+	r := registryWith(&fakePoolImporter{
+		FetchFn: func(ctx context.Context, c *regfetch.Client, ref string) (*manifest.Component, error) {
+			return &manifest.Component{
+				Name:    "fetched-name",
+				Version: strPtr("9.9.9"),
+				Purl:    strPtr("pkg:fake/upstream@9.9.9"),
+			}, nil
+		},
+	})
+
+	res, err := Add(AddOptions{
+		FromDir:         dir,
+		Name:            "v",
+		Version:         "1",
+		VendoredAt:      "./src/vendor",
+		UpstreamRef:     "pkg:fake/upstream@9.9.9",
+		UpstreamName:    "real-name",
+		UpstreamVersion: "1.2.3",
+		Registry:        r,
+	})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	cm, _ := parseComponentsFile(res.Path)
+	a := cm.Components[0].Pedigree.Ancestors[0]
+	if a.Name != "real-name" {
+		t.Fatalf("--upstream-name should override fetched: got %q", a.Name)
+	}
+	if a.Version == nil || *a.Version != "1.2.3" {
+		t.Fatalf("--upstream-version should override fetched: got %+v", a.Version)
+	}
+}
+
+func TestAdd_UpstreamRef_NoMatchErrors(t *testing.T) {
+	dir := t.TempDir()
+	seedPrimaryWithPurl(t, dir, "pkg:github/acme/repo@1")
+	mkVendorDir(t, dir, "src/vendor")
+	r := regfetch.NewRegistry() // empty
+
+	_, err := Add(AddOptions{
+		FromDir:     dir,
+		Name:        "v",
+		Version:     "1",
+		VendoredAt:  "./src/vendor",
+		UpstreamRef: "pkg:unknown/x@1",
+		Registry:    r,
+	})
+	if err == nil {
+		t.Fatal("expected error for unmatched --upstream-ref, got nil")
+	}
+	if !strings.Contains(err.Error(), "--upstream-ref") {
+		t.Fatalf("error should mention --upstream-ref: %v", err)
+	}
+}
+
 func TestUpdate_Refresh_FetchesFromImporter(t *testing.T) {
 	dir := t.TempDir()
 	seedPrimary(t, dir)

@@ -32,6 +32,28 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the HTTP call. Useful for air-gapped CI driving `add`/`update` from
   scripted ref values.
 
+### Added
+
+- `bomtique manifest add --upstream-ref <purl-or-url>`: fetches the
+  upstream ancestor's metadata through the same importer registry as
+  `--ref` does for the component side. Populates name, version,
+  license, description, purl, and the standard external references on
+  `pedigree.ancestors[0]` directly from the registry. The
+  `--upstream-name`, `--upstream-version`, `--upstream-purl`,
+  `--upstream-supplier`, `--upstream-website`, and `--upstream-vcs`
+  scalar flags are still available and override fetched fields with
+  the same precedence as the component-side overrides. Honors
+  `BOMTIQUE_OFFLINE=1`.
+- `bomtique manifest update --primary [flags]`: updates the primary
+  manifest's primary component instead of locating a pool entry by
+  ref. Symmetric with `manifest add --primary`. Takes no positional
+  `<ref>` argument. Supports the same field-replacement flags
+  (`--name`, `--version`, `--license`, `--cpe`, `--purl`, etc.),
+  `--clear-*` null-outs, `--to <version>` with purl-segment lockstep,
+  `--refresh`, and `--dry-run`. Removes the previous "edit
+  `.primary.json` by hand" workaround for release-time version bumps;
+  CI workflows can now scriptably bump the primary's version.
+
 ### Added (v0.2.0 preview — M14 hand-authored mutation surface)
 
 **Mutation engine (M14.0).**

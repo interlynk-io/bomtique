@@ -1,0 +1,28 @@
+{
+  "schema": "component-manifest/v1",
+  "components": [
+    {
+      "name": "libtls",
+      "version": "3.9.0",
+      "description": "LibreSSL Portable itself. This includes the build scaffold and compatibility layer that builds portable LibreSSL from the OpenBSD source code. Pull requests or patches sent to tech@openbsd.org are welcome.",
+      "license": {
+        "expression": "ISC"
+      },
+      "purl": "pkg:github/libressl/portable@3.9.0",
+      "external_references": [
+        {
+          "type": "website",
+          "url": "https://www.libressl.org"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/libressl/portable"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/libressl/portable/issues"
+        }
+      ]
+    }
+  ]
+}

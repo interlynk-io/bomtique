@@ -12,3 +12,6 @@ coverage.out
 .idea/
 .vscode/
 *.swp
+
+# Implementation roadmap, kept locally rather than in-repo.
+TASKS.md

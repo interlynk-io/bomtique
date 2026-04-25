@@ -27,6 +27,11 @@ type UpdateOptions struct {
 	Ref     string
 	DryRun  bool
 
+	// Primary, when true, redirects the update to the primary
+	// manifest's primary component instead of locating a pool entry
+	// by Ref. Ref MUST be empty when Primary is set.
+	Primary bool
+
 	// ToVersion bumps the target component's `version` to this value.
 	// When set and the current `purl` carries a version segment equal
 	// to the old version, the purl is bumped in lockstep; otherwise
@@ -97,8 +102,12 @@ type UpdateResult struct {
 // ErrUpdateNotFound is returned when no component matches the ref.
 var ErrUpdateNotFound = errors.New("no component matches the supplied ref")
 
-// Update mutates an existing pool component in place.
+// Update mutates either an existing pool component (default) or the
+// primary manifest's primary component (when opts.Primary is set).
 func Update(opts UpdateOptions) (*UpdateResult, error) {
+	if opts.Primary {
+		return updatePrimary(opts)
+	}
 	ref, err := graph.ParseRef(strings.TrimSpace(opts.Ref))
 	if err != nil {
 		return nil, fmt.Errorf("parse ref %q: %w", opts.Ref, err)
@@ -459,4 +468,129 @@ func bumpPurlVersion(raw, oldVer, newVer string) (updated string, didBump bool, 
 	}
 	p.Version = newVer
 	return p.String(), true, nil
+}
+
+// updatePrimary mutates the primary component inside .primary.json.
+// Same field semantics as the pool path (--to, --refresh, scalar
+// overrides, --clear-*), but operates on the single primary
+// component without identity-collision checks (primary is its own
+// role, not a pool member).
+func updatePrimary(opts UpdateOptions) (*UpdateResult, error) {
+	if strings.TrimSpace(opts.Ref) != "" {
+		return nil, fmt.Errorf("--primary takes no <ref> argument; remove %q", opts.Ref)
+	}
+	if strings.TrimSpace(opts.Into) != "" {
+		return nil, errors.New("--into is not valid with --primary; the primary always lives in .primary.json")
+	}
+
+	fromDir := opts.FromDir
+	if fromDir == "" {
+		fromDir = "."
+	}
+	primaryPath, err := LocatePrimary(fromDir)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(primaryPath)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", primaryPath, err)
+	}
+	m, err := manifest.ParseJSON(data, primaryPath)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", primaryPath, err)
+	}
+	if m.Kind != manifest.KindPrimary || m.Primary == nil {
+		return nil, fmt.Errorf("%s is not a primary manifest", primaryPath)
+	}
+
+	original := m.Primary.Primary
+	updated := original
+
+	var fields []string
+	purlBumped := false
+
+	// --to version: bump version, sync purl segment when it matches.
+	if newVer := strings.TrimSpace(opts.ToVersion); newVer != "" {
+		oldVer := ""
+		if updated.Version != nil {
+			oldVer = *updated.Version
+		}
+		if oldVer != newVer {
+			updated.Version = &newVer
+			fields = append(fields, "version")
+			if updated.Purl != nil && *updated.Purl != "" {
+				bumped, didBump, err := bumpPurlVersion(*updated.Purl, oldVer, newVer)
+				if err != nil {
+					return nil, fmt.Errorf("bump purl: %w", err)
+				}
+				if didBump {
+					updated.Purl = &bumped
+					fields = append(fields, "purl")
+					purlBumped = true
+				} else {
+					diag.Warn("purl %q left unchanged: version segment does not match old version %q (update manually if needed)", *updated.Purl, oldVer)
+				}
+			}
+		}
+	}
+
+	if opts.Refresh {
+		fetched, err := fetchUpdatedMetadata(opts, &updated)
+		if err != nil {
+			return nil, err
+		}
+		if fetched != nil {
+			merged, _ := MergeComponent(&updated, fetched)
+			if merged != nil {
+				updated = *merged
+				fields = append(fields, "regfetch")
+			}
+		}
+	}
+
+	applyOverrides(&updated, opts, &fields)
+	applyClears(&updated, opts, &fields)
+
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("update with no changes requested: supply at least one field flag, --to, or --clear-*")
+	}
+
+	oldRef := primaryIdentString(&original)
+	newRef := primaryIdentString(&updated)
+
+	m.Primary.Primary = updated
+	if errs := validate.Manifest(m, validate.Options{SkipFilesystem: true}); len(errs) > 0 {
+		m.Primary.Primary = original
+		return nil, &ErrInitValidation{Errors: errs}
+	}
+
+	res := &UpdateResult{
+		DryRun:            opts.DryRun,
+		Path:              primaryPath,
+		OldRef:            oldRef,
+		NewRef:            newRef,
+		FieldsChanged:     fields,
+		PurlVersionBumped: purlBumped,
+	}
+	if opts.DryRun {
+		m.Primary.Primary = original
+		return res, nil
+	}
+	if err := writeManifest(primaryPath, m); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// primaryIdentString returns a human-readable identity for the
+// primary component: its purl when present, else "<name>@<version>",
+// else just the name.
+func primaryIdentString(c *manifest.Component) string {
+	if c.Purl != nil && strings.TrimSpace(*c.Purl) != "" {
+		return *c.Purl
+	}
+	if c.Version != nil && strings.TrimSpace(*c.Version) != "" {
+		return c.Name + "@" + *c.Version
+	}
+	return c.Name
 }
