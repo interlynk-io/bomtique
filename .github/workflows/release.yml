@@ -1,0 +1,85 @@
+# SPDX-FileCopyrightText: 2026 Interlynk.io
+# SPDX-License-Identifier: Apache-2.0
+#
+# Release workflow. Triggered by tag pushes matching `v*` (e.g. v0.1.0).
+# Drives goreleaser end to end: cross-compiled binaries, archives,
+# checksums, cosign keyless signatures, multi-arch Docker image to GHCR,
+# Homebrew formula push to interlynk-io/homebrew-tap, and a GitHub
+# release populated with all artefacts plus the dogfooded
+# bomtique-self SBOMs.
+#
+# Required repository secrets:
+#   HOMEBREW_TAP_TOKEN - fine-grained PAT with `contents:write` on the
+#                        interlynk-io/homebrew-tap repo only. Used by
+#                        goreleaser to commit the formula update.
+# GITHUB_TOKEN is provided automatically; the workflow asks for the
+# extra `packages: write` scope for GHCR and `id-token: write` for
+# cosign keyless signing.
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # create the GitHub release object, upload assets
+  packages: write   # push images to ghcr.io
+  id-token: write   # cosign keyless signing via GitHub OIDC
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # full history so changelog ranges resolve
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Generate dogfood SBOMs
+        # Build a bootstrap binary from this commit, then have it scan
+        # the committed manifests to emit fresh CDX + SPDX SBOMs under
+        # the tag commit's timestamp. goreleaser picks them up via
+        # release.extra_files. The bootstrap binary is thrown away;
+        # goreleaser does its own builds for the release artefacts.
+        run: |
+          set -euo pipefail
+          go build -o ./bin/bomtique ./cmd/bomtique
+          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          mkdir -p ./sbom
+          ./bin/bomtique scan --format cyclonedx --source-date-epoch "$SOURCE_DATE_EPOCH" --out ./sbom
+          ./bin/bomtique scan --format spdx       --source-date-epoch "$SOURCE_DATE_EPOCH" --out ./sbom
+          ls -la ./sbom
+
+      - name: goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # cosign keyless signing pulls an OIDC token from id-token: write.
+          COSIGN_EXPERIMENTAL: "1"

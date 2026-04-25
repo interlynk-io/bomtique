@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Interlynk.io
+# SPDX-License-Identifier: Apache-2.0
+#
+# Slim image used by goreleaser. The binary is already cross-compiled
+# by goreleaser; this Dockerfile just lays it into a distroless base.
+# For ad-hoc `docker build` from source (no goreleaser), use the
+# top-level Dockerfile, which does its own multi-stage build.
+
+FROM gcr.io/distroless/static-debian12:nonroot
+
+COPY bomtique /usr/local/bin/bomtique
+
+USER nonroot:nonroot
+WORKDIR /work
+
+ENTRYPOINT ["/usr/local/bin/bomtique"]
+CMD ["--help"]
