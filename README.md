@@ -9,6 +9,54 @@ metadata.
 Draft. The Component Manifest v1 specification and the reference
 consumer (`bomtique`) both ship today; a v0.2 release is in preparation.
 
+## Install
+
+Pick the channel that matches your platform.
+
+### Homebrew (macOS, Linux)
+
+```bash
+brew install interlynk-io/tap/bomtique
+```
+
+### Docker
+
+```bash
+docker pull ghcr.io/interlynk-io/bomtique:latest
+docker run --rm -v "$PWD:/work" ghcr.io/interlynk-io/bomtique:latest scan
+```
+
+The image is multi-arch (linux/amd64 + linux/arm64) and runs as a
+non-root user out of a distroless base.
+
+### Pre-built binary
+
+Download the archive for your platform from the
+[releases page](https://github.com/interlynk-io/bomtique/releases),
+verify against `checksums.txt`, and drop the `bomtique` binary on your
+`PATH`:
+
+```bash
+# macOS Apple Silicon (substitute the version + arch you need)
+curl -LO https://github.com/interlynk-io/bomtique/releases/download/v0.1.0/bomtique_0.1.0_Darwin_arm64.tar.gz
+curl -LO https://github.com/interlynk-io/bomtique/releases/download/v0.1.0/checksums.txt
+shasum -a 256 -c checksums.txt --ignore-missing
+tar xzf bomtique_0.1.0_Darwin_arm64.tar.gz
+sudo mv bomtique /usr/local/bin/
+```
+
+The release also ships a cosign signature of `checksums.txt`
+(`checksums.txt.sig` + `checksums.txt.pem`) for keyless signature
+verification.
+
+### From source (Go 1.26+)
+
+```bash
+go install github.com/interlynk-io/bomtique/cmd/bomtique@latest
+```
+
+Verify with `bomtique --version`.
+
 ## Getting started
 
 New here? Start with [**`docs/getting-started.md`**](./docs/getting-started.md):
