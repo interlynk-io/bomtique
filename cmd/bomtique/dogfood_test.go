@@ -17,8 +17,8 @@ import (
 // in either case the fix is to re-run the recipe in
 // scripts/regenerate-dogfood.sh.
 //
-// The recipe deliberately uses only offline flag-driven adds — no
-// registry fetches — so the test is hermetic.
+// The recipe deliberately uses flag-driven adds with no --ref, so no
+// registry fetches happen and the test is hermetic.
 func TestDogfood_RegenerateByteIdentical(t *testing.T) {
 	repoRoot := findRepoRootFromCWD(t)
 	tmp := t.TempDir()
@@ -80,7 +80,6 @@ func TestDogfood_RegenerateByteIdentical(t *testing.T) {
 	}
 	for _, d := range pool {
 		args := []string{"manifest", "add",
-			"--offline",
 			"--name", d.name,
 			"--version", d.version,
 			"--type", "library",
@@ -108,7 +107,7 @@ func TestDogfood_RegenerateByteIdentical(t *testing.T) {
 	}
 	for _, d := range primaryDeps {
 		runOK(
-			"manifest", "add", "--primary", "--offline",
+			"manifest", "add", "--primary",
 			"--name", d.name,
 			"--version", d.version,
 			"--purl", d.purl,

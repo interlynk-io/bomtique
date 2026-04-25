@@ -23,8 +23,7 @@ type addFlags struct {
 	Primary  bool
 	From     string
 	External []string
-	Offline  bool
-	Online   bool
+	Ref      string
 
 	Name          string
 	Version       string
@@ -71,10 +70,14 @@ Input sources (merged in order, later layers win):
   1. --from <path|->   a JSON file containing a bare Component object, or
                        '-' to read one from stdin. Fields not in the file
                        are left unset.
-  2. Registry import   when the chosen ref (--purl, else --name used as a
-                       URL) matches a registered importer (github, gitlab,
-                       npm, pypi, cargo). See 'bomtique manifest --help'.
-                       --offline skips this step; --online requires a match.
+  2. --ref <ref>       importer fetch. The ref is a purl (pkg:<type>/...)
+                       or a registry URL (github.com, gitlab.com, npmjs.com,
+                       pypi.org, crates.io); see 'bomtique manifest --help'
+                       for the supported shapes. When --ref is set but no
+                       importer matches, add fails. When --ref is unset, no
+                       fetch happens. Set BOMTIQUE_OFFLINE=1 to validate
+                       the ref against the importer set without making the
+                       HTTP call.
   3. CLI flags         every --name/--version/--license/... value supplied.
                        Each override prints one 'warning: flag --X overrode
                        field Y from --from input' line on stderr.
@@ -120,8 +123,11 @@ Examples:
   # from a JSON file (license.texts, hashes, pedigree come from the file)
   bomtique manifest add --from ./incoming/libx.json
 
-  # online import — name/version/license/... lifted from npm, flags win
-  bomtique manifest add --online --purl pkg:npm/express@4.18.2
+  # registry fetch via purl
+  bomtique manifest add --ref pkg:npm/express@4.18.2
+
+  # registry fetch via URL
+  bomtique manifest add --ref https://www.npmjs.com/package/express/v/4.18.2
 
   # vendored component with directory-hash and upstream ancestor
   bomtique manifest add \
@@ -147,8 +153,12 @@ Examples:
 	cmd.Flags().StringArrayVar(&f.External, "external", nil,
 		"extra external reference as type=url (repeatable); type is one of website|vcs|documentation|"+
 			"issue-tracker|distribution|support|release-notes|advisories|other")
-	cmd.Flags().BoolVar(&f.Offline, "offline", false, "skip all registry metadata fetches (no network; mutually exclusive with --online)")
-	cmd.Flags().BoolVar(&f.Online, "online", false, "require a registered importer to match the ref; fail if none does")
+	cmd.Flags().StringVar(&f.Ref, "ref", "",
+		"importer ref: a purl (pkg:<type>/<name>[@<ver>]) or registry URL "+
+			"(github.com, gitlab.com, npmjs.com, pypi.org, crates.io). When "+
+			"set, bomtique fetches metadata from the matching importer; flag "+
+			"values override fetched fields. Set BOMTIQUE_OFFLINE=1 to skip "+
+			"the HTTP call.")
 
 	cmd.Flags().StringVar(&f.Name, "name", "", "component name")
 	cmd.Flags().StringVar(&f.Version, "version", "", "component version")
@@ -158,7 +168,7 @@ Examples:
 			"(default: library)")
 	cmd.Flags().StringVar(&f.Description, "description", "", "human-readable description")
 	cmd.Flags().StringVar(&f.License, "license", "", "SPDX license expression (use --from for structured license texts)")
-	cmd.Flags().StringVar(&f.Purl, "purl", "", "Package URL; drives registry-importer matching (e.g. pkg:npm/express@4.18.2)")
+	cmd.Flags().StringVar(&f.Purl, "purl", "", "literal Package URL to record on the component (use --ref to drive a registry fetch)")
 	cmd.Flags().StringVar(&f.CPE, "cpe", "", "CPE 2.3 identifier")
 	cmd.Flags().StringVar(&f.Scope, "scope", "", "pool-entry scope: required|optional|excluded (ignored on --primary)")
 
@@ -230,8 +240,7 @@ func runManifestAdd(stdout, stderr io.Writer, f *addFlags, stdin io.Reader) erro
 		UpstreamWebsite:  f.UpstreamWebsite,
 		UpstreamVCS:      f.UpstreamVCS,
 
-		Offline: f.Offline,
-		Online:  f.Online,
+		Ref: f.Ref,
 	}
 
 	// Wire the diag sink to our stderr so --from override notes and

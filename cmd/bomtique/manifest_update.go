@@ -22,8 +22,7 @@ type updateFlags struct {
 	DryRun  bool
 	ToVer   string
 	ExtList []string
-	Offline bool
-	Online  bool
+	Refresh bool
 
 	Name          string
 	Version       string
@@ -71,9 +70,11 @@ Change model:
   * --to <version> bumps the component's version. If the current purl
     carries a version segment equal to the old version, the purl is bumped
     in lockstep; otherwise the purl is left alone with a stderr note.
-  * --online re-runs the registry importer for the target's purl and
-    layers flag values on top (same precedence as 'add'). --offline skips
-    the fetch. Importer list: see 'bomtique manifest --help'.
+  * --refresh re-runs the registry importer for the target's purl and
+    layers flag values on top (same precedence as 'add'). Without it,
+    no fetch happens. Set BOMTIQUE_OFFLINE=1 to validate the purl
+    against the importer set without making the HTTP call. Importer
+    list: see 'bomtique manifest --help'.
   * pedigree.patches[] survives by default so 'patch' entries are not lost
     across unrelated updates; pass --clear-pedigree-patches to drop it.
   * Identity collisions against existing pool entries (§11) are rejected.
@@ -97,7 +98,7 @@ Examples:
   bomtique manifest update pkg:generic/libx@1.0 --clear-license
 
   # refresh metadata from the importer, keep local overrides
-  bomtique manifest update pkg:npm/express@4.18.2 --online
+  bomtique manifest update pkg:npm/express@4.18.2 --refresh
 
   # dry-run preview
   bomtique manifest update libx@1.0 --license MIT --dry-run`,
@@ -115,8 +116,10 @@ Examples:
 		"replace external_references; each value type=url (repeatable); "+
 			"type is one of website|vcs|documentation|issue-tracker|distribution|"+
 			"support|release-notes|advisories|other")
-	cmd.Flags().BoolVar(&f.Offline, "offline", false, "skip registry metadata refresh (no network)")
-	cmd.Flags().BoolVar(&f.Online, "online", false, "require a registered importer to refresh the target's metadata; fail if none matches")
+	cmd.Flags().BoolVar(&f.Refresh, "refresh", false,
+		"re-fetch metadata from the importer matching the target's purl; "+
+			"fails if no importer matches. Set BOMTIQUE_OFFLINE=1 to skip "+
+			"the HTTP call.")
 
 	cmd.Flags().StringVar(&f.Name, "name", "", "rename component")
 	cmd.Flags().StringVar(&f.Version, "version", "", "replace version (use --to for lockstep purl bump)")
@@ -201,8 +204,7 @@ func runManifestUpdate(stdout, stderr io.Writer, f *updateFlags, ref string) err
 		ClearTags:            f.ClearTags,
 		ClearPedigreePatches: f.ClearPedigreePatches,
 
-		Offline: f.Offline,
-		Online:  f.Online,
+		Refresh: f.Refresh,
 	}
 
 	res, err := mutate.Update(opts)

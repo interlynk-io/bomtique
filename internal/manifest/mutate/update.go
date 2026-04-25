@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -67,14 +68,16 @@ type UpdateOptions struct {
 	ClearTags            bool
 	ClearPedigreePatches bool
 
-	// Registry-metadata refresh (M14.7). When Offline, Update never
-	// calls out. When Online, a matching importer MUST be available
-	// or Update fails. Default: auto-refresh when the target
-	// component's purl matches a registered importer AND a version
-	// bump (--to) is in flight — a plain flag replace does not
-	// trigger a network call.
-	Offline  bool
-	Online   bool
+	// Refresh, when true, re-fetches metadata from the importer
+	// matching the target component's existing purl and layers flag
+	// values on top. Update fails with ErrUnsupportedRef if no
+	// importer matches. Default (false): no fetch is attempted; the
+	// update is purely flag-driven.
+	//
+	// The BOMTIQUE_OFFLINE=1 env var disables the fetch (the purl is
+	// still validated against the importer set, but no HTTP call is
+	// made).
+	Refresh  bool
 	Registry *regfetch.Registry
 	Client   *regfetch.Client
 	Ctx      context.Context
@@ -96,9 +99,6 @@ var ErrUpdateNotFound = errors.New("no component matches the supplied ref")
 
 // Update mutates an existing pool component in place.
 func Update(opts UpdateOptions) (*UpdateResult, error) {
-	if opts.Offline && opts.Online {
-		return nil, errors.New("--offline and --online are mutually exclusive")
-	}
 	ref, err := graph.ParseRef(strings.TrimSpace(opts.Ref))
 	if err != nil {
 		return nil, fmt.Errorf("parse ref %q: %w", opts.Ref, err)
@@ -211,11 +211,11 @@ func Update(opts UpdateOptions) (*UpdateResult, error) {
 		}
 	}
 
-	// Registry-metadata refresh (M14.7). Only fires on --online to
+	// Registry-metadata refresh (M14.7). Only fires on --refresh to
 	// keep `update` predictable for callers doing plain field
 	// rewrites. The fetched component fills fields, but any
 	// subsequent override from flags takes precedence.
-	if opts.Online {
+	if opts.Refresh {
 		fetched, err := fetchUpdatedMetadata(opts, &updated)
 		if err != nil {
 			return nil, err
@@ -412,17 +412,17 @@ func applyClears(c *manifest.Component, opts UpdateOptions, fields *[]string) {
 	}
 }
 
-// fetchUpdatedMetadata runs the post-bump regfetch refresh on a
-// single component. Returns (nil, nil) when no importer matches the
-// updated component's purl; returns ErrUnsupportedRef only when
-// --online was explicitly requested and the ref is un-importable.
+// fetchUpdatedMetadata refetches metadata for the target component
+// using its existing purl as the importer ref. Honoured only when
+// opts.Refresh is set. Returns ErrUnsupportedRef when the purl isn't
+// importable. Honors BOMTIQUE_OFFLINE=1 by skipping the HTTP call.
 func fetchUpdatedMetadata(opts UpdateOptions, updated *manifest.Component) (*manifest.Component, error) {
 	var ref string
 	if updated.Purl != nil {
 		ref = strings.TrimSpace(*updated.Purl)
 	}
 	if !strings.HasPrefix(ref, "pkg:") {
-		return nil, fmt.Errorf("%w: --online requires the target component to carry a pkg: purl", regfetch.ErrUnsupportedRef)
+		return nil, fmt.Errorf("%w: --refresh requires the target component to carry a pkg: purl", regfetch.ErrUnsupportedRef)
 	}
 	registry := opts.Registry
 	if registry == nil {
@@ -431,6 +431,9 @@ func fetchUpdatedMetadata(opts UpdateOptions, updated *manifest.Component) (*man
 	imp := registry.Match(ref)
 	if imp == nil {
 		return nil, fmt.Errorf("%w: %q", regfetch.ErrUnsupportedRef, ref)
+	}
+	if os.Getenv("BOMTIQUE_OFFLINE") == "1" {
+		return nil, nil
 	}
 	client := opts.Client
 	if client == nil {

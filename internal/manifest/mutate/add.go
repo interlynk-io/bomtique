@@ -89,14 +89,18 @@ type AddOptions struct {
 	UpstreamWebsite  string
 	UpstreamVCS      string
 
-	// Registry-metadata import (M14.7). When Offline is true, the
-	// import step is skipped regardless of whether any importer
-	// would match the ref. When Online is true, a matching importer
-	// MUST claim the ref or Add fails with ErrUnsupportedRef. Default
-	// behaviour (both false): auto-fetch when an importer matches,
-	// skeleton otherwise.
-	Offline bool
-	Online  bool
+	// Ref is the importer reference. Accepts both purl form
+	// (pkg:github/owner/repo@v1) and URL form
+	// (https://github.com/owner/repo/releases/tag/v1) for any
+	// registered importer. When set and a matching importer claims
+	// the ref, Add fetches metadata from the registry; flag values
+	// override fetched fields. When set but no importer matches,
+	// Add fails with ErrUnsupportedRef. When empty, Add skips the
+	// fetch and builds the component purely from flags / FromPath.
+	//
+	// The BOMTIQUE_OFFLINE=1 env var disables every fetch (the ref
+	// is still validated, but no HTTP call is made).
+	Ref string
 
 	// Registry lets tests inject an isolated Importer set. Nil
 	// falls back to the process-global regfetch.Default().
@@ -153,9 +157,6 @@ var ErrInvalidRef = errors.New("cannot derive depends-on ref: need --purl, or bo
 // Add is the entry point for `bomtique manifest add`. It routes to the
 // pool-add or primary-depends-on path based on opts.Primary.
 func Add(opts AddOptions) (*AddResult, error) {
-	if opts.Offline && opts.Online {
-		return nil, errors.New("--offline and --online are mutually exclusive")
-	}
 	base, err := readFromSource(opts)
 	if err != nil {
 		return nil, err
@@ -547,39 +548,32 @@ func formatFor(path string) manifest.Format {
 	return manifest.FormatJSON
 }
 
-// tryRegfetch implements the import step of M14.7:
+// tryRegfetch resolves opts.Ref against the importer registry and
+// fetches metadata when a match is found. Behaviour:
 //
-//   - --offline: never fetches, returns (nil, nil).
-//   - --online: requires an importer to match the supplied ref;
-//     errors with ErrUnsupportedRef otherwise.
-//   - default: auto-fetches when an importer matches, returns
-//     (nil, nil) when none does (skeleton path).
-//
-// The ref is picked from opts.Purl first (must start with "pkg:"),
-// falling back to opts.Name when it parses as a URL. Callers who
-// want a different ref precedence set opts.Purl explicitly to the
-// string they want fetched.
+//   - opts.Ref empty: returns (nil, nil); no fetch is attempted.
+//   - opts.Ref set, no importer matches: returns ErrUnsupportedRef.
+//   - opts.Ref set, importer matches, BOMTIQUE_OFFLINE=1: returns
+//     (nil, nil) — the ref is validated against the registry but no
+//     HTTP call is made.
+//   - opts.Ref set, importer matches: invokes Fetch and returns its
+//     result.
 func tryRegfetch(opts AddOptions) (*manifest.Component, error) {
-	if opts.Offline {
+	ref := strings.TrimSpace(opts.Ref)
+	if ref == "" {
 		return nil, nil
 	}
-	ref := pickFetchRef(opts)
+
 	registry := opts.Registry
 	if registry == nil {
 		registry = regfetch.Default()
 	}
-
-	if ref == "" {
-		if opts.Online {
-			return nil, fmt.Errorf("%w: --online requires a --purl or URL-shaped --name", regfetch.ErrUnsupportedRef)
-		}
-		return nil, nil
-	}
 	imp := registry.Match(ref)
 	if imp == nil {
-		if opts.Online {
-			return nil, fmt.Errorf("%w: %q", regfetch.ErrUnsupportedRef, ref)
-		}
+		return nil, fmt.Errorf("%w: %q", regfetch.ErrUnsupportedRef, ref)
+	}
+
+	if os.Getenv("BOMTIQUE_OFFLINE") == "1" {
 		return nil, nil
 	}
 
@@ -592,20 +586,6 @@ func tryRegfetch(opts AddOptions) (*manifest.Component, error) {
 		ctx = context.Background()
 	}
 	return imp.Fetch(ctx, client, ref)
-}
-
-// pickFetchRef chooses the string regfetch will receive. Purl wins
-// because it's the canonical form spec §11 cares about; URL-shaped
-// names are accepted too for users pasting a GitHub repo URL as
-// --name. The function returns "" when neither field is usable.
-func pickFetchRef(opts AddOptions) string {
-	if p := strings.TrimSpace(opts.Purl); strings.HasPrefix(p, "pkg:") {
-		return p
-	}
-	if n := strings.TrimSpace(opts.Name); strings.HasPrefix(n, "http://") || strings.HasPrefix(n, "https://") {
-		return n
-	}
-	return ""
 }
 
 // repoHostPurlTypes are the purl types §9.3 pattern 1 supports for

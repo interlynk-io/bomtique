@@ -34,13 +34,13 @@ func (f *fakePoolImporter) Fetch(ctx context.Context, c *regfetch.Client, ref st
 	}, nil
 }
 
-func registryWith(imp *fakePoolImporter) *regfetch.Registry {
+func registryWith(imp regfetch.Importer) *regfetch.Registry {
 	r := regfetch.NewRegistry()
 	r.Register(imp)
 	return r
 }
 
-func TestAdd_Regfetch_DefaultAutoFetches(t *testing.T) {
+func TestAdd_Ref_PurlFetches(t *testing.T) {
 	dir := t.TempDir()
 	seedPrimary(t, dir)
 	r := registryWith(&fakePoolImporter{})
@@ -48,7 +48,7 @@ func TestAdd_Regfetch_DefaultAutoFetches(t *testing.T) {
 	res, err := Add(AddOptions{
 		FromDir: dir,
 		Name:    "ignored", Version: "1.0",
-		Purl:     "pkg:fake/thing@1.0",
+		Ref:      "pkg:fake/thing@1.0",
 		Registry: r,
 	})
 	if err != nil {
@@ -66,12 +66,12 @@ func TestAdd_Regfetch_DefaultAutoFetches(t *testing.T) {
 	}
 }
 
-func TestAdd_Regfetch_OfflineSkipsFetch(t *testing.T) {
+func TestAdd_Ref_EmptyDoesNothing(t *testing.T) {
 	dir := t.TempDir()
 	seedPrimary(t, dir)
 	r := registryWith(&fakePoolImporter{
 		FetchFn: func(ctx context.Context, c *regfetch.Client, ref string) (*manifest.Component, error) {
-			t.Fatal("Fetch called under --offline")
+			t.Fatal("Fetch called when --ref was empty")
 			return nil, nil
 		},
 	})
@@ -79,8 +79,8 @@ func TestAdd_Regfetch_OfflineSkipsFetch(t *testing.T) {
 	res, err := Add(AddOptions{
 		FromDir: dir,
 		Name:    "local", Version: "1.0",
-		Purl:     "pkg:fake/thing@1.0",
-		Offline:  true,
+		Purl: "pkg:fake/thing@1.0", // literal purl, no fetch
+		// Ref intentionally empty
 		Registry: r,
 	})
 	if err != nil {
@@ -90,19 +90,48 @@ func TestAdd_Regfetch_OfflineSkipsFetch(t *testing.T) {
 	c := cm.Components[0]
 	// No license because no fetch happened and no --license flag.
 	if c.License != nil {
-		t.Fatalf("--offline leaked fetched data: %+v", c.License)
+		t.Fatalf("empty --ref leaked fetched data: %+v", c.License)
 	}
 }
 
-func TestAdd_Regfetch_OnlineRequiresMatch(t *testing.T) {
+func TestAdd_Ref_BomtiqueOfflineEnvSkipsFetch(t *testing.T) {
+	t.Setenv("BOMTIQUE_OFFLINE", "1")
+	dir := t.TempDir()
+	seedPrimary(t, dir)
+	r := registryWith(&fakePoolImporter{
+		FetchFn: func(ctx context.Context, c *regfetch.Client, ref string) (*manifest.Component, error) {
+			t.Fatal("Fetch called under BOMTIQUE_OFFLINE=1")
+			return nil, nil
+		},
+	})
+
+	res, err := Add(AddOptions{
+		FromDir:  dir,
+		Name:     "local",
+		Version:  "1.0",
+		Ref:      "pkg:fake/thing@1.0",
+		Registry: r,
+	})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	cm, _ := parseComponentsFile(res.Path)
+	c := cm.Components[0]
+	// No license because BOMTIQUE_OFFLINE skipped the fetch.
+	if c.License != nil {
+		t.Fatalf("BOMTIQUE_OFFLINE leaked fetched data: %+v", c.License)
+	}
+}
+
+func TestAdd_Ref_NoMatchErrors(t *testing.T) {
 	dir := t.TempDir()
 	seedPrimary(t, dir)
 	r := regfetch.NewRegistry() // empty
 
 	_, err := Add(AddOptions{
 		FromDir: dir,
-		Name:    "x", Version: "1", Purl: "pkg:unknown/x@1",
-		Online:   true,
+		Name:    "x", Version: "1",
+		Ref:      "pkg:unknown/x@1",
 		Registry: r,
 	})
 	if !errors.Is(err, regfetch.ErrUnsupportedRef) {
@@ -110,34 +139,13 @@ func TestAdd_Regfetch_OnlineRequiresMatch(t *testing.T) {
 	}
 }
 
-func TestAdd_Regfetch_OnlineWithoutPurlOrURL(t *testing.T) {
+func TestAdd_Ref_URLForm(t *testing.T) {
 	dir := t.TempDir()
 	seedPrimary(t, dir)
-	_, err := Add(AddOptions{
-		FromDir: dir,
-		Name:    "x", Version: "1",
-		Online: true,
-	})
-	if !errors.Is(err, regfetch.ErrUnsupportedRef) {
-		t.Fatalf("expected ErrUnsupportedRef for --online without ref, got %v", err)
-	}
-}
-
-func TestAdd_Regfetch_OfflineOnlineMutuallyExclusive(t *testing.T) {
-	_, err := Add(AddOptions{Offline: true, Online: true})
-	if err == nil {
-		t.Fatal("expected mutual-exclusion error")
-	}
-}
-
-func TestAdd_Regfetch_URLShapedName(t *testing.T) {
-	dir := t.TempDir()
-	seedPrimary(t, dir)
-	imp := &fakePoolImporter{
-		FetchFn: func(ctx context.Context, c *regfetch.Client, ref string) (*manifest.Component, error) {
-			if !strings.HasPrefix(ref, "https://") {
-				t.Fatalf("importer got non-URL ref: %q", ref)
-			}
+	captured := ""
+	imp := &urlImporter{
+		FetchFn: func(ref string) (*manifest.Component, error) {
+			captured = ref
 			return &manifest.Component{
 				Name:    "from-url",
 				Version: strPtr("1"),
@@ -145,12 +153,47 @@ func TestAdd_Regfetch_URLShapedName(t *testing.T) {
 			}, nil
 		},
 	}
-	// Override Matches so the URL form is accepted.
-	imp2 := &urlImporter{inner: imp}
-	r := regfetch.NewRegistry()
-	r.Register(imp2)
+	r := registryWith(imp)
 
 	_, err := Add(AddOptions{
+		FromDir:  dir,
+		Name:     "real-name",
+		Version:  "1",
+		Ref:      "https://example.com/foo/v1",
+		Registry: r,
+	})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if captured != "https://example.com/foo/v1" {
+		t.Fatalf("URL ref not passed through: got %q", captured)
+	}
+}
+
+// urlImporter matches https:// refs, used to confirm URL form works.
+type urlImporter struct {
+	FetchFn func(ref string) (*manifest.Component, error)
+}
+
+func (u *urlImporter) Name() string            { return "fake-url" }
+func (u *urlImporter) Matches(ref string) bool { return strings.HasPrefix(ref, "https://") }
+func (u *urlImporter) Fetch(ctx context.Context, c *regfetch.Client, ref string) (*manifest.Component, error) {
+	return u.FetchFn(ref)
+}
+
+func TestAdd_Ref_NameAsURLNoLongerTriggersFetch(t *testing.T) {
+	// Regression guard: passing a URL via --name (the old footgun)
+	// must not be interpreted as an importer ref.
+	dir := t.TempDir()
+	seedPrimary(t, dir)
+	r := registryWith(&urlImporter{
+		FetchFn: func(ref string) (*manifest.Component, error) {
+			t.Fatalf("URL-shaped --name must not trigger fetch: ref=%q", ref)
+			return nil, nil
+		},
+	})
+
+	res, err := Add(AddOptions{
 		FromDir:  dir,
 		Name:     "https://example.com/foo",
 		Version:  "1",
@@ -159,35 +202,26 @@ func TestAdd_Regfetch_URLShapedName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
+	cm, _ := parseComponentsFile(res.Path)
+	if cm.Components[0].Name != "https://example.com/foo" {
+		t.Fatalf("--name stored verbatim: got %q", cm.Components[0].Name)
+	}
 }
 
-// urlImporter wraps fakePoolImporter to match on https:// prefix
-// instead of pkg:fake/.
-type urlImporter struct {
-	inner *fakePoolImporter
-}
-
-func (u *urlImporter) Name() string            { return "fake-url" }
-func (u *urlImporter) Matches(ref string) bool { return strings.HasPrefix(ref, "https://") }
-func (u *urlImporter) Fetch(ctx context.Context, c *regfetch.Client, ref string) (*manifest.Component, error) {
-	return u.inner.Fetch(ctx, c, ref)
-}
-
-func TestAdd_Regfetch_VendoredAtBypassedByOffline(t *testing.T) {
-	// Confirm that --offline on a vendored-at add still does the
-	// synthesis (hash directive + ancestor) — regfetch is unrelated.
+func TestAdd_Ref_VendoredAtNoFetchByDefault(t *testing.T) {
+	// vendored-at synthesis is independent of regfetch; with no --ref
+	// the importer must never fire and the synthesis must still happen.
 	dir := t.TempDir()
-	// github primary so derivation works.
 	seedPrimaryWithPurl(t, dir, "pkg:github/acme/repo@1")
 	mkVendorDir(t, dir, "src/vendor")
 
 	res, err := Add(AddOptions{
-		FromDir: dir,
-		Name:    "v", Version: "1",
+		FromDir:         dir,
+		Name:            "v",
+		Version:         "1",
 		VendoredAt:      "./src/vendor",
 		UpstreamName:    "u",
 		UpstreamVersion: "1",
-		Offline:         true,
 	})
 	if err != nil {
 		t.Fatalf("Add: %v", err)
@@ -195,18 +229,11 @@ func TestAdd_Regfetch_VendoredAtBypassedByOffline(t *testing.T) {
 	cm, _ := parseComponentsFile(res.Path)
 	c := cm.Components[0]
 	if c.Purl == nil || !strings.Contains(*c.Purl, "src/vendor") {
-		t.Fatalf("derived purl missing under --offline: %+v", c.Purl)
+		t.Fatalf("derived purl missing: %+v", c.Purl)
 	}
 }
 
-func TestUpdate_Regfetch_OfflineOnlineMutuallyExclusive(t *testing.T) {
-	_, err := Update(UpdateOptions{Offline: true, Online: true})
-	if err == nil {
-		t.Fatal("expected mutual-exclusion error")
-	}
-}
-
-func TestUpdate_Regfetch_OnlineRefreshesFromImporter(t *testing.T) {
+func TestUpdate_Refresh_FetchesFromImporter(t *testing.T) {
 	dir := t.TempDir()
 	seedPrimary(t, dir)
 	seedPoolWith(t, filepath.Join(dir, ".components.json"), []manifest.Component{
@@ -226,7 +253,7 @@ func TestUpdate_Regfetch_OnlineRefreshesFromImporter(t *testing.T) {
 	res, err := Update(UpdateOptions{
 		FromDir:  dir,
 		Ref:      "pkg:fake/x@1",
-		Online:   true,
+		Refresh:  true,
 		Registry: r,
 	})
 	if err != nil {
@@ -242,7 +269,7 @@ func TestUpdate_Regfetch_OnlineRefreshesFromImporter(t *testing.T) {
 	}
 }
 
-func TestUpdate_Regfetch_OnlineRefreshWithFlagOverride(t *testing.T) {
+func TestUpdate_Refresh_FlagOverridesFetched(t *testing.T) {
 	dir := t.TempDir()
 	seedPrimary(t, dir)
 	seedPoolWith(t, filepath.Join(dir, ".components.json"), []manifest.Component{
@@ -262,7 +289,7 @@ func TestUpdate_Regfetch_OnlineRefreshWithFlagOverride(t *testing.T) {
 	_, err := Update(UpdateOptions{
 		FromDir:     dir,
 		Ref:         "pkg:fake/x@1",
-		Online:      true,
+		Refresh:     true,
 		Registry:    r,
 		Description: "from flag",
 	})
@@ -276,7 +303,7 @@ func TestUpdate_Regfetch_OnlineRefreshWithFlagOverride(t *testing.T) {
 	}
 }
 
-func TestUpdate_Regfetch_OnlineRequiresPurl(t *testing.T) {
+func TestUpdate_Refresh_RequiresPurl(t *testing.T) {
 	dir := t.TempDir()
 	seedPrimary(t, dir)
 	seedPoolWith(t, filepath.Join(dir, ".components.json"), []manifest.Component{
@@ -285,14 +312,14 @@ func TestUpdate_Regfetch_OnlineRequiresPurl(t *testing.T) {
 	_, err := Update(UpdateOptions{
 		FromDir: dir,
 		Ref:     "x@1",
-		Online:  true,
+		Refresh: true,
 	})
 	if !errors.Is(err, regfetch.ErrUnsupportedRef) {
 		t.Fatalf("expected ErrUnsupportedRef, got %v", err)
 	}
 }
 
-func TestUpdate_Regfetch_DefaultSkipsFetch(t *testing.T) {
+func TestUpdate_Refresh_DefaultSkipsFetch(t *testing.T) {
 	dir := t.TempDir()
 	seedPrimary(t, dir)
 	seedPoolWith(t, filepath.Join(dir, ".components.json"), []manifest.Component{
@@ -300,11 +327,11 @@ func TestUpdate_Regfetch_DefaultSkipsFetch(t *testing.T) {
 	})
 	r := registryWith(&fakePoolImporter{
 		FetchFn: func(ctx context.Context, c *regfetch.Client, ref string) (*manifest.Component, error) {
-			t.Fatal("Fetch called under default mode (expected skip)")
+			t.Fatal("Fetch called without --refresh")
 			return nil, nil
 		},
 	})
-	// No --online. The fake importer must NOT fire.
+	// No Refresh. The fake importer must NOT fire.
 	_, err := Update(UpdateOptions{
 		FromDir:     dir,
 		Ref:         "pkg:fake/x@1",
