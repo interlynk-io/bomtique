@@ -6,55 +6,18 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
-### Changed (breaking)
+## v0.1.0 — 2026-04-25
 
-- `bomtique manifest add`: removed `--online` and `--offline` flags;
-  added `--ref <purl-or-url>`. A registry fetch happens when (and
-  only when) `--ref` is supplied and matches a registered importer
-  (github, gitlab, npm, pypi, crates.io); URL form is now first-class
-  for every importer (e.g.
-  `--ref https://github.com/libressl/portable/releases/tag/v3.9.0`).
-  When `--ref` is omitted, no fetch happens. When `--ref` is supplied
-  but no importer matches, `add` errors with `ErrUnsupportedRef`.
-  `--purl` no longer drives the importer match — it's purely the
-  literal purl recorded on the component. Migration: rename `--online
-  --purl pkg:npm/foo@1` to `--ref pkg:npm/foo@1`; drop `--offline`
-  (no fetch is now the default).
-- `bomtique manifest update`: removed `--online` and `--offline`
-  flags; added `--refresh`. Use `--refresh` to refetch metadata from
-  the importer matching the target component's existing purl.
-  Migration: rename `--online` to `--refresh`; drop `--offline`.
-- `--name` no longer doubles as a URL/ref carrier. URL inputs go
-  through `--ref` exclusively; passing a URL via `--name` now stores
-  it verbatim as the component's name field.
-- New `BOMTIQUE_OFFLINE=1` env var: hard kill switch that validates
-  `--ref` / `--refresh` purls against the importer registry but skips
-  the HTTP call. Useful for air-gapped CI driving `add`/`update` from
-  scripted ref values.
+First tagged release. `bomtique` ships a complete reference consumer
+for Component Manifest v1: it parses, validates, builds the shared
+pool, resolves per-primary reachability, and emits both CycloneDX 1.7
+and SPDX 2.3 SBOMs under a deterministic `SOURCE_DATE_EPOCH` regime.
+Alongside the consumer, v0.1.0 ships a hand-authored mutation surface
+(`manifest init|add|remove|update|patch`) and registry importers for
+GitHub, GitLab, npm, PyPI, and crates.io driven by `--ref` and
+`--upstream-ref`.
 
-### Added
-
-- `bomtique manifest add --upstream-ref <purl-or-url>`: fetches the
-  upstream ancestor's metadata through the same importer registry as
-  `--ref` does for the component side. Populates name, version,
-  license, description, purl, and the standard external references on
-  `pedigree.ancestors[0]` directly from the registry. The
-  `--upstream-name`, `--upstream-version`, `--upstream-purl`,
-  `--upstream-supplier`, `--upstream-website`, and `--upstream-vcs`
-  scalar flags are still available and override fetched fields with
-  the same precedence as the component-side overrides. Honors
-  `BOMTIQUE_OFFLINE=1`.
-- `bomtique manifest update --primary [flags]`: updates the primary
-  manifest's primary component instead of locating a pool entry by
-  ref. Symmetric with `manifest add --primary`. Takes no positional
-  `<ref>` argument. Supports the same field-replacement flags
-  (`--name`, `--version`, `--license`, `--cpe`, `--purl`, etc.),
-  `--clear-*` null-outs, `--to <version>` with purl-segment lockstep,
-  `--refresh`, and `--dry-run`. Removes the previous "edit
-  `.primary.json` by hand" workaround for release-time version bumps;
-  CI workflows can now scriptably bump the primary's version.
-
-### Added (v0.2.0 preview — M14 hand-authored mutation surface)
+### Added — Mutation surface (M14)
 
 **Mutation engine (M14.0).**
 - `internal/manifest/mutate` package with the parse-edit-rewrite
@@ -67,12 +30,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 (tmp + rename), preserves Unknown fields on `--force`. Does not
 create `.components.json`; the first `add` does.
 
-**`bomtique manifest add`** — flag-driven plus `--from file|-`
-plus registry auto-fetch. Pool or primary depends-on targets.
-`--vendored-at <dir>` synthesises a §9.3 repo-local purl, a §8.3
-directory hash directive (digest computed at scan time, not add
-time, per §15.4), and a `pedigree.ancestors[0]` from `--upstream-*`
-flags.
+**`bomtique manifest add`** — flag-driven plus `--from file|-`. Pool
+or primary depends-on targets. `--vendored-at <dir>` synthesises a
+§9.3 repo-local purl, a §8.3 directory hash directive (digest
+computed at scan time, not add time, per §15.4), and a
+`pedigree.ancestors[0]` from `--upstream-*` flags.
 
 **`bomtique manifest remove <ref>`** — drops a component and
 scrubs `depends-on` edges across the pool and primary with
@@ -80,8 +42,9 @@ scrubs `depends-on` edges across the pool and primary with
 
 **`bomtique manifest update <ref>`** — field replace, `--to
 <version>` with lockstep purl update, ten `--clear-*` flags,
-`pedigree.patches` preserved by default, optional `--online`
-registry refresh.
+`pedigree.patches` preserved by default, `--refresh` for registry
+re-fetch, `--primary` to operate on the primary itself instead of
+a pool entry (release-time version bumps are scriptable).
 
 **`bomtique manifest patch <ref> <diff-path>`** — §7.4 patch
 registration under `pedigree.patches[]` with `--resolves
@@ -94,8 +57,20 @@ add.
   with 30 s timeout and 1 MiB body cap.
 - Sentinels: `ErrNetwork`, `ErrNotFound`, `ErrRateLimited`,
   `ErrUnsupportedRef`, `ErrResponseTooLarge`, `ErrOffline`.
-- `--offline` / `--online` flags on `manifest add` and
-  `manifest update`. Mutually exclusive.
+- `--ref <purl-or-url>` on `manifest add` and `--refresh` on
+  `manifest update` drive registry fetches. URL form is first-class
+  for every importer (e.g.
+  `--ref https://github.com/libressl/portable/releases/tag/v3.9.0`).
+  When `--ref` is omitted, no fetch happens. When `--ref` is supplied
+  but no importer matches, `add` errors with `ErrUnsupportedRef`.
+- `--upstream-ref <purl-or-url>` on `manifest add` populates
+  `pedigree.ancestors[0]` from the importer matching the upstream;
+  `--upstream-name`/`--upstream-version`/etc. remain as overrides
+  with the same flag-wins precedence.
+- `BOMTIQUE_OFFLINE=1` env var: validates `--ref` / `--upstream-ref` /
+  `--refresh` against the importer registry but skips the HTTP call.
+  Useful for air-gapped CI driving `add`/`update` from scripted ref
+  values.
 - Consumer-path network invariant enforced by
   `TestNoNetworkImportsOutsideRegfetch`.
 
@@ -127,20 +102,18 @@ add.
   `pkg:cargo/serde@1.0.193`.
 
 **Docs.**
+- `docs/getting-started.md` — progressive walkthrough that grows a
+  small C/embedded firmware project from one TLS dependency through
+  vendored + patched code, per-build variants, deterministic builds,
+  and SBOM drift detection. Each section has a matching snapshot
+  under `examples/getting-started/`.
 - `docs/usage.md` expanded with every mutation command, importer
   matrix, and environment-variable catalogue.
 - `docs/security.md` gains an "importer network model" section
-  (host allowlist, response cap, token handling, `--offline`).
+  (host allowlist, response cap, token handling, `BOMTIQUE_OFFLINE`).
 - `docs/discovery.md` notes the mutation walk semantics.
 
-## v0.1.0 — 2026-04-24
-
-First tagged release. `bomtique` is now a working reference consumer
-for Component Manifest v1: it parses, validates, pool-builds,
-resolves reachability, and emits both CycloneDX 1.7 and SPDX 2.3
-SBOMs under a deterministic `SOURCE_DATE_EPOCH` regime.
-
-### Added
+### Added — Foundation (M1–M13)
 
 **Manifest layer (M1).**
 - Go type surface for every Component Manifest v1 object.
@@ -206,9 +179,10 @@ SBOMs under a deterministic `SOURCE_DATE_EPOCH` regime.
 - Determinism harness asserts byte-identical output across two runs.
 
 **CLI (M9).**
-- `bomtique generate [paths...]` — full pipeline with `--out`,
-  `--stdout` (NDJSON), `--format cyclonedx|spdx`, `--source-date-epoch`,
-  `--max-file-size`, `--tag`, `--warnings-as-errors`.
+- `bomtique scan [paths...]` — full pipeline with `--out`,
+  NDJSON stdout, `--format cyclonedx|spdx`, `--source-date-epoch`,
+  `--max-file-size`, `--tag`, `--warnings-as-errors`,
+  `--output-validate`.
 - `bomtique validate [paths...]` — validation only.
 - `bomtique manifest schema` — JSON Schema draft-2020-12 placeholder.
 - Exit codes: `0` ok, `1` validation, `2` usage, `3` I/O, `4`
@@ -242,25 +216,28 @@ SBOMs under a deterministic `SOURCE_DATE_EPOCH` regime.
 - `docs/usage.md`, `docs/determinism.md`, `docs/security.md`,
   `docs/compatibility.md` describing the shipped behaviour.
 - `Dockerfile` on `gcr.io/distroless/static-debian12:nonroot`.
-- `.goreleaser.yaml` producing `linux/amd64`, `linux/arm64`,
-  `darwin/arm64`, `windows/amd64` archives with SHA-256 checksums and
-  cosign signing hook.
+- `.goreleaser.yaml` producing cross-platform archives with SHA-256
+  checksums and cosign signing hook; `.github/workflows/release.yml`
+  ships binaries, multi-arch GHCR image, and a Homebrew formula in
+  `interlynk-io/homebrew-tap`.
 - Dogfood: `.primary.json` + `.components.json` describing bomtique
-  itself; generated `sbom/bomtique-0.1.0.cdx.json` committed as the
-  release artefact.
+  itself; `bomtique-0.1.0.cdx.json` + `.spdx.json` regenerated and
+  attached to the release at tag time.
 
 ### Deferred
 
-Tracked in [TASKS.md](TASKS.md) for a follow-up:
+Tracked locally for follow-up:
 
 - Canonical JSON Schema draft 2020-12 for Appendix A (`bomtique manifest
   schema` prints a placeholder today).
-- `--output-validate` post-emit schema validation (accepts the flag,
-  no-op today).
 - `--follow-symlinks` opt-in path (accepted, still refuses).
 - Full SPDX License Expression grammar validation
   (`Options.SPDXExpressionStrict`).
 - Directory-walk fuzz corpus.
+- `--to` extending the lockstep version bump to a component's CPE 2.3
+  version segment (today only `version` and the `purl` segment move).
+- `dockers_v2` / `homebrew_casks` migration in `.goreleaser.yaml`
+  ahead of the upstream deprecations.
 
 ## Pre-v0.1.0
 
