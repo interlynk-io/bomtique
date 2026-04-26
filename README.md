@@ -36,6 +36,11 @@ end.
   layer features in as the project grows.
 - [`docs/usage.md`](./docs/usage.md) — full CLI reference for every
   subcommand and flag, registry importers, and exit codes.
+- [`docs/agent-onboarding-prompt.md`](./docs/agent-onboarding-prompt.md) —
+  drop-in prompt for AI coding agents (Claude Code, Cursor, Aider,
+  …): tells the agent how to survey your repo, ask clarifying
+  questions, and author manifests with bomtique's CLI without
+  guessing.
 - [`spec/component-manifest-v1.md`](./spec/component-manifest-v1.md) — the
   Component Manifest specification, version 1. A normative RFC-style
   specification of two hand-authored file formats (primary manifests and
