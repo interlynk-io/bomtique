@@ -22,6 +22,22 @@ Operating constraints:
    `--ref` / `--upstream-ref` / `--refresh` flags (those hit GitHub,
    GitLab, npm, PyPI, or crates.io to fetch metadata). That's fine.
    The agent's own learning of bomtique's CLI is what stays local.
+6. Co-locate manifests with the source they describe. Do NOT create
+   a separate `manifests/`, `sbom-inputs/`, `bomtique/`, or similar
+   centralised directory to hold all the manifest files. Specifically:
+   - Each `.primary.json` lives in the directory of the artifact it
+     describes — the repo root for a single-artifact project, or
+     the artifact's own source directory for a multi-artifact
+     project.
+   - Each `.components.json` lives where its components live.
+     Vendored libraries sitting under `lib/foo/` get a
+     `lib/foo/.components.json`; an internal submodule ships its
+     own `.components.json` at the submodule root; project-wide
+     dependencies live in a root `.components.json`.
+   - Bomtique's discovery walks the tree and merges every
+     `.components.json` into one shared pool, so co-location costs
+     nothing at scan time and keeps SBOM ownership close to code
+     ownership.
 
 Work in five phases, in order. Pause at the end of each phase for
 user confirmation before moving to the next.
@@ -168,8 +184,9 @@ Once the user has answered Phase 3:
 
 a. `bomtique manifest init` for each primary the user confirmed,
    passing `--name`, `--version`, `--type`, `--license`, supplier,
-   external references. Use `-C <dir>` when scaffolding into a
-   subdirectory.
+   external references. Use `-C <artifact-source-dir>` so each
+   `.primary.json` lands in the directory of the artifact it
+   describes, never in a centralised manifests/ folder.
 
 b. For each pool component, decide which add pattern fits and
    explain the choice in your scratch notes:
@@ -211,12 +228,23 @@ d. Handle `bomtique` errors as they arise:
      path is empty (uninitialised submodule, or wrong `--ext`
      filter). Init the submodule, or expand the extension list.
 
-e. Wire each pool component into the appropriate primary's
+e. Pass `-C <dir>` or `--into <path>` on each `manifest add` so the
+   `.components.json` lands alongside the source it describes:
+   - Vendored library at `lib/foo/`: target
+     `lib/foo/.components.json`.
+   - Internal submodule with its own subtree: the submodule's own
+     root `.components.json`.
+   - Project-wide dependencies that don't fit in any subtree:
+     repo-root `.components.json`.
+   - NEVER write to `manifests/`, `sbom-inputs/`, or any other
+     centralised holding directory.
+
+f. Wire each pool component into the appropriate primary's
    `depends-on` with `bomtique manifest add --primary --purl
    <component-purl> ...`. Use `-C <primary-dir>` if the primary
    isn't at the repo root.
 
-f. If the user wants per-variant SBOMs, attach `--tag <variant>` to
+g. If the user wants per-variant SBOMs, attach `--tag <variant>` to
    the relevant pool components.
 
 ==============================================================

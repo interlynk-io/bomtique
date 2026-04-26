@@ -50,6 +50,16 @@ the end of each phase for your confirmation:
   commit.
 - **Hands off `obsolete/`/`legacy/`/`archive/`** without explicit
   confirmation.
+- **Manifests co-locate with source.** Each `.primary.json` lands
+  in the directory of the artifact it describes, and each
+  `.components.json` lives next to the components it covers
+  (vendored library at `lib/foo/` → `lib/foo/.components.json`,
+  internal submodule → its own root, repo-wide deps → repo root).
+  Bomtique's discovery walks the tree and merges every
+  `.components.json` into one shared pool at scan time, so this
+  costs nothing at scan time and keeps SBOM ownership close to code
+  ownership for PR review. The agent will not create a centralised
+  `manifests/` holding directory.
 
 ## Adapting the prompt
 
