@@ -12,7 +12,7 @@ consumer (`bomtique`) both ship today; a v0.2 release is in preparation.
 ## Install
 
 ```bash
-brew tap interlynk-io/tap
+brew tap interlynk-io/interlynk
 brew install bomtique
 ```
 
