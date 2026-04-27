@@ -141,12 +141,21 @@ brews:
       name: homebrew-interlynk
       branch: main
       token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
+      # The tap repo enforces "changes via PR" + "verified signatures"
+      # on main. Open a PR for each release instead of pushing direct.
+      pull_request:
+        enabled: true
     homepage: 'https://github.com/interlynk-io/bomtique'
     description: 'Hand-authored SBOM toolkit: emit CycloneDX/SPDX SBOMs from curated Component Manifests.'
     license: 'Apache-2.0'
+    # Commits go through the GitHub Contents API; GitHub web-flow signs
+    # them automatically when the committer email matches a verified
+    # email on the PAT owner's account. We use the PAT owner's GitHub
+    # noreply address (riteshnoronha, user id 147178) so the signature
+    # verifies regardless of which mailbox identity the bot prefers.
     commit_author:
-      name: interlynk-bot
-      email: noreply@interlynk.io
+      name: riteshnoronha
+      email: 147178+riteshnoronha@users.noreply.github.com
     install: |
       bin.install "bomtique"
     test: |
