@@ -139,12 +139,19 @@ brews:
     repository:
       owner: interlynk-io
       name: homebrew-interlynk
-      branch: main
+      # Push the formula update to a per-release branch and open a PR
+      # against main. The tap repo enforces "changes via PR" + "verified
+      # signatures" on main, so direct pushes 409. goreleaser requires
+      # the head branch (this) to differ from pull_request.base.branch
+      # (below); when they match it silently falls back to direct push.
+      branch: bomtique-{{ .Version }}
       token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
-      # The tap repo enforces "changes via PR" + "verified signatures"
-      # on main. Open a PR for each release instead of pushing direct.
       pull_request:
         enabled: true
+        base:
+          owner: interlynk-io
+          name: homebrew-interlynk
+          branch: main
     homepage: 'https://github.com/interlynk-io/bomtique'
     description: 'Hand-authored SBOM toolkit: emit CycloneDX/SPDX SBOMs from curated Component Manifests.'
     license: 'Apache-2.0'
