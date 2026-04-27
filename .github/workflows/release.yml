@@ -59,18 +59,23 @@ jobs:
 
       - name: Generate dogfood SBOMs
         # Build a bootstrap binary from this commit, then have it scan
-        # the committed manifests to emit fresh CDX + SPDX SBOMs under
+        # the repo's own manifests to emit fresh CDX + SPDX SBOMs under
         # the tag commit's timestamp. goreleaser picks them up via
         # release.extra_files. The bootstrap binary is thrown away;
         # goreleaser does its own builds for the release artefacts.
+        #
+        # Output goes to ./dist-sbom (untracked) so the working tree
+        # stays clean for goreleaser's git-state validator. Scan is
+        # scoped to bomtique's own primary + components manifests so
+        # it doesn't pull in examples/ or testdata fixtures.
         run: |
           set -euo pipefail
           go build -o ./bin/bomtique ./cmd/bomtique
           export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
-          mkdir -p ./sbom
-          ./bin/bomtique scan --format cyclonedx --source-date-epoch "$SOURCE_DATE_EPOCH" --out ./sbom
-          ./bin/bomtique scan --format spdx       --source-date-epoch "$SOURCE_DATE_EPOCH" --out ./sbom
-          ls -la ./sbom
+          mkdir -p ./dist-sbom
+          ./bin/bomtique scan .primary.json .components.json --format cyclonedx --source-date-epoch "$SOURCE_DATE_EPOCH" --out ./dist-sbom
+          ./bin/bomtique scan .primary.json .components.json --format spdx       --source-date-epoch "$SOURCE_DATE_EPOCH" --out ./dist-sbom
+          ls -la ./dist-sbom
 
       - name: goreleaser
         uses: goreleaser/goreleaser-action@v6
