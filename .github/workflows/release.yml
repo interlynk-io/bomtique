@@ -4,13 +4,13 @@
 # Release workflow. Triggered by tag pushes matching `v*` (e.g. v0.1.0).
 # Drives goreleaser end to end: cross-compiled binaries, archives,
 # checksums, cosign keyless signatures, multi-arch Docker image to GHCR,
-# Homebrew formula push to interlynk-io/homebrew-tap, and a GitHub
+# Homebrew formula push to interlynk-io/homebrew-interlynk, and a GitHub
 # release populated with all artefacts plus the dogfooded
 # bomtique-self SBOMs.
 #
 # Required repository secrets:
 #   HOMEBREW_TAP_TOKEN - fine-grained PAT with `contents:write` on the
-#                        interlynk-io/homebrew-tap repo only. Used by
+#                        interlynk-io/homebrew-interlynk repo only. Used by
 #                        goreleaser to commit the formula update.
 # GITHUB_TOKEN is provided automatically; the workflow asks for the
 # extra `packages: write` scope for GHCR and `id-token: write` for
