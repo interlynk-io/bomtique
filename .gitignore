@@ -1,6 +1,7 @@
 # Go build artifacts
 /bin/
 /dist/
+/dist-sbom/
 coverage.out
 
 # Local purl-spec test suite — cloned by developers, not tracked.
